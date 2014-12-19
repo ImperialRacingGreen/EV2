@@ -1,6 +1,7 @@
-#include <rg_fsm.h>
-#include <SimpleTimer.h>
-#include <Firmata.h>
+#include "rg_fsm.h"
+#include "SimpleTimer.h"
+#include "Firmata.h"
+#include "EV2_CAN.h"
 
 //------------------------------------
 byte portStatus[TOTAL_PORTS];	// each bit: 1=pin is digital input, 0=other/ignore
@@ -10,7 +11,7 @@ void sendPort(byte portNumber, byte portValue)
 {
   portValue = portValue & portStatus[portNumber];
   if (previousPINs[portNumber] != portValue) {
-    Firmata.sendDigitalPort(portNumber, portValue);
+    /*FIRMATA Firmata.sendDigitalPort(portNumber, portValue);*/
     previousPINs[portNumber] = portValue;
   }
 }
@@ -69,12 +70,14 @@ void analogWriteCallback(byte pin, int value)
 
 void setup() 
 {
+  // Testing
+  Serial.begin(115200);
   
   byte i, port, status;
   
   
   // put your setup code here, to run once:
-  Firmata.setFirmwareVersion(0, 1);
+  // Firmata.setFirmwareVersion(0, 1);
   
    for (pin = 0; pin < TOTAL_PINS; pin++) {
     if IS_PIN_DIGITAL(pin) pinMode(PIN_TO_DIGITAL(pin), INPUT);
@@ -88,9 +91,11 @@ void setup()
     portStatus[port] = status;
   }
 
+  /*
   Firmata.attach(ANALOG_MESSAGE, analogWriteCallback);
   
   Firmata.begin(57600);
+  */
   
   //assigning handler and check routine functions
   startUpState.setCheckRoutines(startUpStateCheckRoutine);
@@ -115,7 +120,12 @@ void setup()
   
   //default initial state is idel state
   car.setStateInOperation(idleState);
-  
+
+  //CAN Setup
+  if (!CAN_setup())
+    Serial.println("CAN initialization (sync) ERROR");
+  else
+    Serial.println("Setup Done");
 }
 
 byte analogPin = 0;
@@ -123,17 +133,17 @@ byte digitalPin = 0;
 
 void loop() 
 {
-  
+
   //printADC(); 
   car.driveMafakaas();
   //printVals.run();
   readVals.run();
   
+  /*FIRMATA
   while (Firmata.available()) {
     Firmata.processInput();
   }
-  
-  
+  */
   
   // do one analogRead per loop, so if PC is sending a lot of
   // analog write messages, we will only delay 1 analogRead
@@ -143,7 +153,7 @@ void loop()
     sendPort(digitalPin, readPort(digitalPin, 0xff));
   }
   
-  
+  /*FIRMATA
   Firmata.sendAnalog(analogPin, CHANNEL_7_REG);
   analogPin = analogPin + 1;
   Firmata.sendAnalog(analogPin, CHANNEL_6_REG);
@@ -160,7 +170,7 @@ void loop()
   analogPin = analogPin + 1;
   Firmata.sendAnalog(analogPin, CHANNEL_0_REG);
   analogPin = 0;
-  
+  */
 
   if(car.getNextStateId() == STARTUP_STATE)
     car.setStateInOperation(startUpState);
@@ -172,6 +182,24 @@ void loop()
     car.setStateInOperation(idleState);
     
   //printCurrentState(car);
+
+  // Testing
+  int incomingByte = 0;
+  Serial.print("CAN2 Output : ");
+  while(true) {
+    if (Serial.available() > 0) {
+      incomingByte = Serial.parseInt();
+      Serial.print("Received: ");
+      Serial.println(incomingByte,HEX);
+
+      CAN_FRAME outFrame;
+      createFrame(outFrame,NDRIVE_TXID,3,DS_SERVO,129,1);
+      printFrame(outFrame);
+      CAN2.sendFrame(outFrame);
+
+      break;
+    }
+  }
 }
 
 
@@ -197,8 +225,14 @@ void startUpStateHandler(state_id &currentState, state_id &nextState){
   digitalWrite(led1, HIGH);
   digitalWrite(led2, LOW);
   
-  //Serial.print("start up state handler\n");
-  
+  Serial.print("start up state handler\n");
+
+  CAN_FRAME outgoing;
+
+  createSpeedRequestFrame(outgoing,SPEED_REPETITION);
+  CAN.sendFrame(outgoing);
+
+  // setup interrupt for pedal (every x milliseconds send throttle data to MC)
 }
 
 void driveStateHandler(state_id &currentState, state_id &nextState){
@@ -209,8 +243,15 @@ void driveStateHandler(state_id &currentState, state_id &nextState){
   digitalWrite(led1,LOW);
   digitalWrite(led2,HIGH);
 
-  //Serial.print("drive state handler\n");
+  Serial.print("drive state handler\n");
+  
+  CAN_FRAME inFrame;
+  while (CAN.rx_avail()) {
+    CAN.get_rx_buff(inFrame);
+    // log data
+  }
 }
+
 void shutDownStateHandler(state_id &currentState, state_id &nextState){
 
   currentState = SHUT_DOWN_STATE;
@@ -219,7 +260,7 @@ void shutDownStateHandler(state_id &currentState, state_id &nextState){
   digitalWrite(led1,HIGH);
   digitalWrite(led2,HIGH);
 
-  //Serial.print("shut down state handler\n"); 
+  Serial.print("shut down state handler\n"); 
 }
 
 void idleStateHandler(state_id &currentState, state_id &nextState){
@@ -229,49 +270,107 @@ void idleStateHandler(state_id &currentState, state_id &nextState){
         
   digitalWrite(led2,LOW);
   digitalWrite(led1,LOW);
-  //Serial.print("state handler functoin\n");
-
+  Serial.print("state handler functoin\n");
 }
 
 //state check routines
 void startUpStateCheckRoutine(bool &nextStateAssert){
   
-  //Serial.print("Start up state check routine\n");
+  Serial.print("Start up state check routine\n");
   
   if(CHANNEL_0_REG*BIT_CONVERSION_CONSTANT < 2.2)
     nextStateAssert = true;
   else
     nextStateAssert = false;
+
+  // Check if core status OK
+  CAN_FRAME outgoing;
   
+  createCoreStatusRequestFrame(outgoing);
+  CAN.sendFrame(outgoing);
+  delayMicroseconds(100);
+
+  bool ndrive_ok = false;
+  bool bmsstatus_ok = false;
+  bool bmstemp_ok = false;
+  bool bmssoc = false;
+  
+  while(!(ndrive_ok && bmsstatus_ok && bmstemp_ok && bmssoc)) {
+    CAN_FRAME inFrame;
+    if (CAN.rx_avail()) {
+      CAN.get_rx_buff(inFrame);
+      // Check core status
+      if (inFrame.id == NDRIVE_TXID) {
+        if (inFrame.data.bytes[0] == DS_SERVO) {
+          if (inFrame.data.bytes[1] == KERN_STATUS) {
+            nextStateAssert = true;
+            ndrive_ok = true;
+          }
+          else {
+            nextStateAssert = false;
+            Serial.println("NDRIVE Error : not KERN_STATUS");
+          }
+        }
+      }
+      // Check BMS State
+      else if(inFrame.id == BMS_STATUS) {
+        if (inFrame.data.bytes[0] == 0) {
+          bmsstatus_ok = true;
+          nextStateAssert = true;
+        }
+        else {
+          Serial.println("BMS Error : State of System = 1");
+          nextStateAssert = false;
+        }
+      }
+      // Check Battery Temperature
+      else if(inFrame.id == PACK_TEMP) {
+        if (inFrame.data.bytes[0] < MAX_TEMP) {
+          bmstemp_ok = true;
+          nextStateAssert = true;
+        }
+        else {
+          Serial.print("BMS Error : Battery above MAX_TEMP = ");
+          Serial.println(inFrame.data.bytes[0]);
+          nextStateAssert = false;
+        }
+      }
+      // Display Pack SoC
+      else if(inFrame.id == PACK_SOC) {
+        bmssoc = true;
+        Serial.print("BMS SoC (%%) = ");
+        Serial.println(inFrame.data.bytes[0]);
+      }
+    }
+  }
 }
+
 void driveStateCheckRoutine(bool &nextStateAssert){
   
-  //Serial.print("drive state check routine\n");
+  Serial.print("drive state check routine\n");
 
   if(CHANNEL_1_REG*BIT_CONVERSION_CONSTANT < 2.2)
     nextStateAssert = true;
   else
     nextStateAssert = false;
-		
 }
+
 void shutDownStateCheckRoutine(bool &nextStateAssert){
 
-  //Serial.print("shut down state check routine\n"); 
+  Serial.print("shut down state check routine\n"); 
 	
   if(CHANNEL_2_REG*BIT_CONVERSION_CONSTANT < 2.2)
     nextStateAssert = true;
   else
     nextStateAssert = false;
-			
 }
 
 void idleStateCheckRoutine(bool &nextStateAssert){
   
-  //Serial.print("idle state check routine\n");
+  Serial.print("idle state check routine\n");
 
   if(CHANNEL_3_REG*BIT_CONVERSION_CONSTANT < 2.2)
     nextStateAssert = true;
   else
     nextStateAssert = false;
-	
 }

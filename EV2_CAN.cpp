@@ -48,26 +48,28 @@ void createFrame(CAN_FRAME &frame, int RXID, int length, int REGID, int DATA_1, 
 
 void parseFrame(CAN_FRAME &frame) {
     if (frame.id == NDRIVE_TXID) {
-        switch(frame.data[0]) {
+        switch(frame.data.bytes[0]) {
             // MC Related
-            case SPEED_READ_ADD:
-                int speed = (frame.data[1] << 8) | frame.data[2];
+            case SPEED_READ_ADD: {
+                int speed = (frame.data.bytes[1] << 8) | frame.data.bytes[2];
                 break;
+            }
             case CORE_STATUS:
-                int status = (frame.data[1] << 8) | frame.data[2];
+                int status = (frame.data.bytes[1] << 8) | frame.data.bytes[2];
                 if (status == KERN_STATUS) {
                     // DRIVE IS ENABLED
                     // POSITION CONTROL IS ENABLED
                     // SPEED CONTROL IS ENABLED
                 } 
                 break;
+
         }
     }
     else {
-    	switch (frame.data[0]) {
+    	switch (frame.data.bytes[0]) {
             // BMS Related
     		case BMS_STATUS:
-                if (frame.data[1] != 0) {
+                if (frame.data.bytes[1] != 0) {
                     // ERROR
                 }
     			break;
@@ -78,7 +80,7 @@ void parseFrame(CAN_FRAME &frame) {
             case PACK_SOC:
                 break;
             case PACK_TEMP:
-                if (frame.data[1] > MAX_TEMP) {
+                if (frame.data.bytes[1] > MAX_TEMP) {
                     // TOO HOT
                 }
                 break;
@@ -86,11 +88,33 @@ void parseFrame(CAN_FRAME &frame) {
     }
 }
 
+void createSpeedRequestFrame(CAN_FRAME &frame, int repetition) {
+    if (repetition > 0) {
+        frame.id = NDRIVE_RXID;
+        frame.length = 3;
+        frame.data.bytes[0] = DS_SERVO;
+        frame.data.bytes[1] = SPEED_READ_ADD;
+        frame.data.bytes[2] = repetition;
+    }
+}
+
+void createCoreStatusRequestFrame(CAN_FRAME &frame) {
+    frame.id = NDRIVE_RXID;
+    frame.length = 3;
+    frame.data.bytes[0] = DS_SERVO;
+    frame.data.bytes[1] = CORE_STATUS;
+    frame.data.bytes[2] = 0x00;
+}
+
 void abort_requests(int REGID) {
 	CAN_FRAME frame_abort;
 	createFrame(frame_abort, NDRIVE_RXID, 3, DS_SERVO, REGID, 0xFF);
 	CAN.sendFrame(frame_abort);
 	delayMicroseconds(100);
+}
+
+void abort_all_requests() {
+    abort_requests(SPEED_READ_ADD);
 }
 
 bool status() {

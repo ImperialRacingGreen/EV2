@@ -1,0 +1,26 @@
+1. StartUpState
+	- set up CAN
+	- check if KERN_STATUS
+	- check if BMS ok
+		- temp
+		- voltage
+	- if all okay then drivestate
+
+2. DriveState
+	- get pedal value
+	-send pedal value to motor controller
+	- logging data
+		- speed
+		- bms
+			- voltage
+			- current
+			- temp
+	- check if BMS ok
+	- if not okay shutdown
+
+3. ShutdownState
+	- may be triggered by emergency buttons
+	- speed = 0
+
+4. IdleState
+	- ask aziz what is in idle state

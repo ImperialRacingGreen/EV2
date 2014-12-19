@@ -25,13 +25,17 @@
 
 bool CAN_setup();
 void printFrame(CAN_FRAME &frame);
-// void parseFrame(CAN_FRAME &frame);	// for logging
+void parseFrame(CAN_FRAME &frame);	// for logging
 void createFrame(CAN_FRAME &frame, int RXID, int length, int REGID, int DATA_1, int DATA_2);
 void abort_requests(int REGID);
 bool status();
 // void sendTorque(int torque_percent);
 void emergency_stop();
 void assert_or_abort(bool condition);
+
+#define SPEED_REPETITION 100
+void createSpeedRequestFrame(CAN_FRAME &frame, int repetition); // repition in ms
+void createCoreStatusRequestFrame(CAN_FRAME &frame);
 
 /**
 *	Pedal Reading
