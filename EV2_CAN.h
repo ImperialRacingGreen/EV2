@@ -25,7 +25,7 @@
 
 bool CAN_setup();
 void printFrame(CAN_FRAME &frame);
-void parseFrame(CAN_FRAME &frame);	// for logging
+bool parseFrame(CAN_FRAME &frame);	// for logging
 void createFrame(CAN_FRAME &frame, int RXID, int length, int REGID, int DATA_1, int DATA_2);
 void abort_requests(int REGID);
 bool status();
@@ -36,7 +36,7 @@ void assert_or_abort(bool condition);
 #define SPEED_REPETITION 100
 void createSpeedRequestFrame(CAN_FRAME &frame, int repetition); // repition in ms
 void createCoreStatusRequestFrame(CAN_FRAME &frame);
-
+void createSpeedWriteFrame(CAN_FRAME &frame, int speed);
 /**
 *	Pedal Reading
 **/
@@ -49,7 +49,7 @@ void ADC_Handler(void);
 int get_pedal_reading(const int raw_value, const int min_value, const int max_value);
 int get_average_pedal_reading(const int reading_1, const int reading_2);
 void assert_pedal_in_threshold(const int reading_1, const int reading_2, const int threshold);
-
+void sendThrottle();
 
 /**
 *	BMS Related Constants

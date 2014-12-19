@@ -46,46 +46,67 @@ void createFrame(CAN_FRAME &frame, int RXID, int length, int REGID, int DATA_1, 
 	// frame.data.low = (REGID, data1 and data2 combined)
 }
 
-void parseFrame(CAN_FRAME &frame) {
+bool parseFrame(CAN_FRAME &frame) {
     if (frame.id == NDRIVE_TXID) {
         switch(frame.data.bytes[0]) {
             // MC Related
             case SPEED_READ_ADD: {
                 int speed = (frame.data.bytes[1] << 8) | frame.data.bytes[2];
+                speed = speed/MAX_SPEED_READ * 100;
+                Serial.print("NDRIVE Speed (%%) = ");
+                Serial.println(speed);
                 break;
             }
-            case CORE_STATUS:
+            case CORE_STATUS: {
                 int status = (frame.data.bytes[1] << 8) | frame.data.bytes[2];
                 if (status == KERN_STATUS) {
-                    // DRIVE IS ENABLED
-                    // POSITION CONTROL IS ENABLED
-                    // SPEED CONTROL IS ENABLED
+                    // DRIVE ENABLED, POSITION CONTROL ENABLED, SPEED CONTROL IS ENABLED
+                    Serial.println("NDRIVE CORE_STATUS = KERN_STATUS");
                 } 
                 break;
-
+            }
         }
     }
+    // BMS Related
     else {
-    	switch (frame.data.bytes[0]) {
-            // BMS Related
-    		case BMS_STATUS:
-                if (frame.data.bytes[1] != 0) {
-                    // ERROR
+    	switch (frame.id) {
+    		case BMS_STATUS: {
+                if (frame.data.bytes[0] != 0) {
+                    Serial.println("BMS Error : State of System = 1");
+                    emergency_stop();
+                    return false;
                 }
     			break;
-            case PACK_VOLTAGE:
+            }
+            case PACK_VOLTAGE: {
+                int voltage = (frame.data.bytes[0] << 8) | frame.data.bytes[1];
+                Serial.print("BMS Voltage = ");
+                Serial.println(voltage);
                 break;
-            case PACK_CURRENT:
+            }
+            case PACK_CURRENT: {
+                int current = (frame.data.bytes[0] << 8) | frame.data.bytes[1];
+                Serial.print("BMS Current = ");
+                Serial.println(current);
                 break;
-            case PACK_SOC:
+            }
+            case PACK_SOC: {
+                Serial.print("BMS SoC (%%) = ");
+                Serial.println(frame.data.bytes[0]);
                 break;
-            case PACK_TEMP:
-                if (frame.data.bytes[1] > MAX_TEMP) {
-                    // TOO HOT
+            }
+            case PACK_TEMP: {
+                if (frame.data.bytes[0] > MAX_TEMP) {
+                    Serial.print("BMS Error : Battery above MAX_TEMP = ");
+                    Serial.println(frame.data.bytes[0]);
+                    emergency_stop();
+                    return false;
                 }
                 break;
+            }
     	}
     }
+    return true;
 }
 
 void createSpeedRequestFrame(CAN_FRAME &frame, int repetition) {
@@ -106,6 +127,15 @@ void createCoreStatusRequestFrame(CAN_FRAME &frame) {
     frame.data.bytes[2] = 0x00;
 }
 
+void createSpeedWriteFrame(CAN_FRAME &frame, int speed) {
+    speed = speed/(0xFFFF) * MAX_SPEED_WRITE;
+    frame.id = NDRIVE_RXID;
+    frame.length = 3;
+    frame.data.bytes[0] = SPEED_WRITE_ADD;
+    frame.data.bytes[1] = speed;
+    frame.data.bytes[2] = speed >> 8;
+}
+
 void abort_requests(int REGID) {
 	CAN_FRAME frame_abort;
 	createFrame(frame_abort, NDRIVE_RXID, 3, DS_SERVO, REGID, 0xFF);
@@ -115,27 +145,6 @@ void abort_requests(int REGID) {
 
 void abort_all_requests() {
     abort_requests(SPEED_READ_ADD);
-}
-
-bool status() {
-	CAN_FRAME frame_status,incoming;
-	createFrame(frame_status, NDRIVE_RXID, 3, DS_SERVO, CORE_STATUS, 0x00);
-	CAN.sendFrame(frame_status);
-	delayMicroseconds(100);
-
-	int counter = 0;
-	while(counter < 5000) {
-		if (CAN.rx_avail()) {
-            CAN.get_rx_buff(incoming);
-            if (incoming.data.low == KERN_STATUS)
-            	return true;
-            else
-            	return false;
-        }
-        else
-        	counter++;
-	}
-	return false;
 }
 
 void adc_setup(void) {
@@ -281,4 +290,13 @@ void assert_pedal_in_threshold(const int reading_1, const int reading_2, const i
     #endif
 
     assert_or_abort(condition);
+}
+
+void sendThrottle()
+{
+    int speed = get_average_pedal_reading(pedal1_raw,pedal2_raw);
+
+    CAN_FRAME outgoing;
+    createSpeedWriteFrame(outgoing,speed);
+    CAN.sendFrame(outgoing);
 }

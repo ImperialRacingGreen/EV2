@@ -2,7 +2,7 @@
 #include "SimpleTimer.h"
 #include "Firmata.h"
 #include "EV2_CAN.h"
-
+#include "DueTimer.h"
 //------------------------------------
 byte portStatus[TOTAL_PORTS];	// each bit: 1=pin is digital input, 0=other/ignore
 byte previousPINs[TOTAL_PORTS];
@@ -126,6 +126,9 @@ void setup()
     Serial.println("CAN initialization (sync) ERROR");
   else
     Serial.println("Setup Done");
+
+  //ADC setup
+  adc_setup();
 }
 
 byte analogPin = 0;
@@ -133,44 +136,8 @@ byte digitalPin = 0;
 
 void loop() 
 {
-
-  //printADC(); 
   car.driveMafakaas();
-  //printVals.run();
   readVals.run();
-  
-  /*FIRMATA
-  while (Firmata.available()) {
-    Firmata.processInput();
-  }
-  */
-  
-  // do one analogRead per loop, so if PC is sending a lot of
-  // analog write messages, we will only delay 1 analogRead
-  byte digitalPin;
-
-  for (digitalPin = 0; digitalPin < TOTAL_PORTS; digitalPin++) {
-    sendPort(digitalPin, readPort(digitalPin, 0xff));
-  }
-  
-  /*FIRMATA
-  Firmata.sendAnalog(analogPin, CHANNEL_7_REG);
-  analogPin = analogPin + 1;
-  Firmata.sendAnalog(analogPin, CHANNEL_6_REG);
-  analogPin = analogPin + 1;
-  Firmata.sendAnalog(analogPin, CHANNEL_5_REG);
-  analogPin = analogPin + 1;
-  Firmata.sendAnalog(analogPin, CHANNEL_4_REG);
-  analogPin = analogPin + 1;
-  Firmata.sendAnalog(analogPin, CHANNEL_3_REG);
-  analogPin = analogPin + 1;
-  Firmata.sendAnalog(analogPin, CHANNEL_2_REG);
-  analogPin = analogPin + 1;
-  Firmata.sendAnalog(analogPin, CHANNEL_1_REG);
-  analogPin = analogPin + 1;
-  Firmata.sendAnalog(analogPin, CHANNEL_0_REG);
-  analogPin = 0;
-  */
 
   if(car.getNextStateId() == STARTUP_STATE)
     car.setStateInOperation(startUpState);
@@ -233,6 +200,8 @@ void startUpStateHandler(state_id &currentState, state_id &nextState){
   CAN.sendFrame(outgoing);
 
   // setup interrupt for pedal (every x milliseconds send throttle data to MC)
+
+  Timer3.attachInterrupt(sendThrottle).start(1000);
 }
 
 void driveStateHandler(state_id &currentState, state_id &nextState){
@@ -244,12 +213,6 @@ void driveStateHandler(state_id &currentState, state_id &nextState){
   digitalWrite(led2,HIGH);
 
   Serial.print("drive state handler\n");
-  
-  CAN_FRAME inFrame;
-  while (CAN.rx_avail()) {
-    CAN.get_rx_buff(inFrame);
-    // log data
-  }
 }
 
 void shutDownStateHandler(state_id &currentState, state_id &nextState){
@@ -353,6 +316,12 @@ void driveStateCheckRoutine(bool &nextStateAssert){
     nextStateAssert = true;
   else
     nextStateAssert = false;
+  
+  CAN_FRAME inFrame;
+  while (CAN.rx_avail()) {
+    CAN.get_rx_buff(inFrame);
+    nextStateAssert = parseFrame(inFrame);
+  }
 }
 
 void shutDownStateCheckRoutine(bool &nextStateAssert){
