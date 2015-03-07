@@ -265,7 +265,9 @@ int get_average_pedal_reading(const int reading_1, const int reading_2) {
 }
 
 int get_average_pedal_reading_value() {
-    return get_average_pedal_reading(pedal1_raw,pedal2_raw);
+    int reading_1 = get_pedal_reading(pedal1_raw, pedal1_min, pedal1_max);
+    int reading_2 = get_pedal_reading(pedal2_raw, pedal2_min, pedal2_max);
+    return get_average_pedal_reading(reading_1,reading_2);
 }
 
 /**

@@ -1,13 +1,15 @@
 #include "EV2_CAN.h"
 #include "DueTimer.h"
 
+#define MAX_THROTTLE 65536
+#define MAX_SPEED 32767
 
 void sendThrottle()
 {
-    int speed = get_average_pedal_reading_value();
+    int normalised_speed = get_average_pedal_reading_value()/MAX_THROTTLE * MAX_SPEED;
 
     CAN_FRAME outgoing;
-    createSpeedWriteFrame(outgoing,speed);
+    createSpeedWriteFrame(outgoing,normalised_speed);
     CAN.sendFrame(outgoing);
 }
 
