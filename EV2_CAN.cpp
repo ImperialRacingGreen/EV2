@@ -264,6 +264,10 @@ int get_average_pedal_reading(const int reading_1, const int reading_2) {
     return (reading_1 + reading_2) / 2;
 }
 
+int get_average_pedal_reading_value() {
+    return get_average_pedal_reading(pedal1_raw,pedal2_raw);
+}
+
 /**
  * Asserts pedal readings are in threshold
  * @param  reading_1
@@ -292,11 +296,3 @@ void assert_pedal_in_threshold(const int reading_1, const int reading_2, const i
     assert_or_abort(condition);
 }
 
-void sendThrottle()
-{
-    int speed = get_average_pedal_reading(pedal1_raw,pedal2_raw);
-
-    CAN_FRAME outgoing;
-    createSpeedWriteFrame(outgoing,speed);
-    CAN.sendFrame(outgoing);
-}

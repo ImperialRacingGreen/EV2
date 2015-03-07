@@ -48,6 +48,9 @@ void adc_setup(void);
 void ADC_Handler(void);
 int get_pedal_reading(const int raw_value, const int min_value, const int max_value);
 int get_average_pedal_reading(const int reading_1, const int reading_2);
+
+int get_average_pedal_reading_value();
+
 void assert_pedal_in_threshold(const int reading_1, const int reading_2, const int threshold);
 void sendThrottle();
 
