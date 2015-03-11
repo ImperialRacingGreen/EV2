@@ -6,20 +6,21 @@
 /**
 * CANBus related constants
 **/
-#define CAN_BAUD_RATE CAN_BPS_500K
+#define CAN_BAUD_RATE CAN_BPS_250K
 #define NDRIVE_RXID 0x210
 #define NDRIVE_TXID 0x180
 
 // Writing
 #define SPEED_WRITE_ADD		0x31
-#define MAX_SPEED_WRITE 	0x0CCD
+#define MAX_SPEED_WRITE 	0x7FFF
 #define TORQUE_WRITE_ADD	0x90
 #define MAX_TORQUE_WRITE	0x7FF8
 
 // Reading
 #define DS_SERVO		0x3D		//Motor Controller
 #define SPEED_READ_ADD	0x30
-#define MAX_SPEED_READ	0x7FFF	
+#define MAX_SPEED_READ	0x7FFF
+#define MC_TEMP		 	0x4B	
 #define CORE_STATUS		0x40
 #define KERN_STATUS		0x181 		// Bit 0 = Drive Enabled, Bit 7 = Position Control, Bit 8 = Speed Control
 
@@ -34,9 +35,11 @@ void emergency_stop();
 void assert_or_abort(bool condition);
 
 #define SPEED_REPETITION 100
+void createTempRequestFrame(CAN_FRAME &frame);
 void createSpeedRequestFrame(CAN_FRAME &frame, int repetition); // repition in ms
 void createCoreStatusRequestFrame(CAN_FRAME &frame);
-void createSpeedWriteFrame(CAN_FRAME &frame, int speed);
+void createSpeedWriteFrame(CAN_FRAME &frame, float speed);
+void createTorqueWriteFrame(CAN_FRAME &frame, float torque);
 /**
 *	Pedal Reading
 **/
