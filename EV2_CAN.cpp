@@ -249,7 +249,6 @@ void assert_or_abort(bool condition)
  * @param  max_value Maximum value
  * @return value     Processed value
  */
-
 int get_pedal_reading(const int raw_value, const int min_value, const int max_value) {
     // Map to 16-bit range
     return constrain(map(raw_value, min_value, max_value, 0, 65536), 0, 65536);
@@ -261,18 +260,9 @@ int get_pedal_reading(const int raw_value, const int min_value, const int max_va
  * @param  reading_2
  * @return
  */
-/**
- * Calibrated values
- */
-
 int get_average_pedal_reading(const int reading_1, const int reading_2) {
     return (reading_1 + reading_2) / 2;
 }
-
-const int pedal1_min = 200;  // pedal1 min value in 12-bit range
-const int pedal1_max = 1000; // pedal1 max value in 12-bit range
-const int pedal2_min = 700;  // pedal2 min value in 12-bit range
-const int pedal2_max = 1500; // pedal2 max value in 12-bit range
 
 int get_average_pedal_reading_value() {
     int reading_1 = get_pedal_reading(pedal1_raw, pedal1_min, pedal1_max);
