@@ -57,6 +57,13 @@ bool parseFrame(CAN_FRAME &frame) {
                 Serial.println(speed);
                 break;
             }
+            case TORQUE_WRITE_ADD: {
+                float torque = (frame.data.bytes[2] << 8) | frame.data.bytes[1];
+                torque = torque/MAX_TORQUE_WRITE * 100;
+                Serial.print("NDRIVE torque (%%) = ");
+                Serial.println(torque);
+                break;
+            }
             case CORE_STATUS: {
                 int status = (frame.data.bytes[2] << 8) | frame.data.bytes[1];
                 if (status == KERN_STATUS) {
@@ -78,8 +85,12 @@ bool parseFrame(CAN_FRAME &frame) {
     		case BMS_STATUS: {
                 if (frame.data.bytes[0] != 0) {
                     Serial.println("BMS Error : State of System = 1");
-                    emergency_stop();
+                    // emergency_stop();
                     return false;
+                }
+                else {
+                    Serial.print("BMS State = ");
+                    Serial.println(frame.data.bytes[0]);
                 }
     			break;
             }
@@ -104,8 +115,12 @@ bool parseFrame(CAN_FRAME &frame) {
                 if (frame.data.bytes[0] > MAX_TEMP) {
                     Serial.print("BMS Error : Battery above MAX_TEMP = ");
                     Serial.println(frame.data.bytes[0]);
-                    emergency_stop();
+                    // emergency_stop();
                     return false;
+                }
+                else {
+                    Serial.print("BMS Temp = ");
+                    Serial.println(frame.data.bytes[0]);
                 }
                 break;
             }
@@ -114,12 +129,14 @@ bool parseFrame(CAN_FRAME &frame) {
     return true;
 }
 
-void createTempRequestFrame(CAN_FRAME &frame) {
-    frame.id = NDRIVE_RXID;
-    frame.length = 3;
-    frame.data.bytes[0] = DS_SERVO;
-    frame.data.bytes[1] = MC_TEMP;
-    frame.data.bytes[2] = 0x00;
+void createTempRequestFrame(CAN_FRAME &frame, int repetition) {
+    if (repetition >= 0) {
+        frame.id = NDRIVE_RXID;
+        frame.length = 3;
+        frame.data.bytes[0] = DS_SERVO;
+        frame.data.bytes[1] = MC_TEMP;
+        frame.data.bytes[2] = repetition;
+    }
 }
 
 void createSpeedRequestFrame(CAN_FRAME &frame, int repetition) {
@@ -128,6 +145,16 @@ void createSpeedRequestFrame(CAN_FRAME &frame, int repetition) {
         frame.length = 3;
         frame.data.bytes[0] = DS_SERVO;
         frame.data.bytes[1] = SPEED_READ_ADD;
+        frame.data.bytes[2] = repetition;
+    }
+}
+
+void createTorqueRequestFrame(CAN_FRAME &frame, int repetition) {
+    if (repetition >= 0) {
+        frame.id = NDRIVE_RXID;
+        frame.length = 3;
+        frame.data.bytes[0] = DS_SERVO;
+        frame.data.bytes[1] = TORQUE_WRITE_ADD;
         frame.data.bytes[2] = repetition;
     }
 }

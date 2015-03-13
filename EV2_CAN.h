@@ -6,7 +6,7 @@
 /**
 * CANBus related constants
 **/
-#define CAN_BAUD_RATE CAN_BPS_250K
+#define CAN_BAUD_RATE CAN_BPS_500K
 #define NDRIVE_RXID 0x210
 #define NDRIVE_TXID 0x180
 
@@ -35,8 +35,9 @@ void emergency_stop();
 void assert_or_abort(bool condition);
 
 #define SPEED_REPETITION 100
-void createTempRequestFrame(CAN_FRAME &frame);
+void createTempRequestFrame(CAN_FRAME &frame, int repetition);
 void createSpeedRequestFrame(CAN_FRAME &frame, int repetition); // repition in ms
+void createTorqueRequestFrame(CAN_FRAME &frame, int repetition); // repition in ms
 void createCoreStatusRequestFrame(CAN_FRAME &frame);
 void createSpeedWriteFrame(CAN_FRAME &frame, float speed);
 void createTorqueWriteFrame(CAN_FRAME &frame, float torque);
