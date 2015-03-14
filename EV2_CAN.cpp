@@ -1,5 +1,50 @@
 #include "EV2_CAN.h"
 
+/****************************************************************/
+int Global_MC_temp   = -1;
+int Global_MC_speed  = -1;
+int Global_MC_torque = -1;
+
+int Global_BMS_voltage = -1;
+int Global_BMS_current = -1;
+int Global_BMS_soc = -1;
+int Global_BMS_temp = -1;
+int Global_BMS_status = -1;
+
+void updateDB(void)
+{
+    Serial.print("MC_temp = ");
+    Serial.print(Global_MC_temp);
+    Serial.print(" || ");
+    Serial.print("MC_speed = ");
+    Serial.print(Global_MC_speed);
+    Serial.print(" || ");
+    Serial.print("MC_torque = ");
+    Serial.print(Global_MC_torque);
+
+    Serial.print("\n");
+
+    Serial.print("BMS_voltage = ");
+    Serial.print(Global_BMS_voltage);
+    Serial.print(" || ");
+    Serial.print("BMS_current = ");
+    Serial.print(Global_BMS_current);
+    Serial.print(" || ");
+    Serial.print("BMS_soc = ");
+    Serial.print(Global_BMS_soc);
+    Serial.print(" || ");
+    Serial.print("BMS_temp = ");
+    Serial.print(Global_BMS_temp);
+    Serial.print(" || ");
+    Serial.print("BMS_status = ");
+    Serial.print(Global_BMS_status);
+
+    Serial.println();
+    Serial.println();
+}
+
+/****************************************************************/
+
 // Registers to store raw pedal readings during interrupt
 volatile int pedal1_raw = -1;
 volatile int pedal2_raw = -1;
@@ -46,36 +91,41 @@ void createFrame(CAN_FRAME &frame, int RXID, int length, int REGID, int DATA_1, 
 	// frame.data.low = (REGID, data1 and data2 combined)
 }
 
+
 bool parseFrame(CAN_FRAME &frame) {
     if (frame.id == NDRIVE_TXID) {
         switch(frame.data.bytes[0]) {
             // MC Related
             case SPEED_READ_ADD: {
-                float speed = (frame.data.bytes[2] << 8) | frame.data.bytes[1];
-                speed = speed/MAX_SPEED_READ * 100;
-                Serial.print("NDRIVE Speed (%%) = ");
-                Serial.println(speed);
+                signed int speed = frame.data.bytes[1];
+                speed = speed * 100 / MAX_SPEED_READ;
+                // Serial.print("NDRIVE Speed (%%) = ");
+                // Serial.println(speed);
+                // Serial.println(speed,HEX);
+                Global_MC_speed = speed;
                 break;
             }
             case TORQUE_WRITE_ADD: {
-                float torque = (frame.data.bytes[2] << 8) | frame.data.bytes[1];
-                torque = torque/MAX_TORQUE_WRITE * 100;
-                Serial.print("NDRIVE torque (%%) = ");
-                Serial.println(torque);
+                unsigned int torque = (frame.data.bytes[2] << 8) | frame.data.bytes[1];
+                torque = torque * 100 / MAX_TORQUE_WRITE;
+                // Serial.print("NDRIVE torque (%%) = ");
+                // Serial.println(torque);
+                Global_MC_torque = torque;
                 break;
             }
             case CORE_STATUS: {
                 int status = (frame.data.bytes[2] << 8) | frame.data.bytes[1];
                 if (status == KERN_STATUS) {
                     // DRIVE ENABLED, POSITION CONTROL ENABLED, SPEED CONTROL IS ENABLED
-                    Serial.println("NDRIVE CORE_STATUS = KERN_STATUS");
+                    // Serial.println("NDRIVE CORE_STATUS = KERN_STATUS");
                 } 
                 break;
             }
             case MC_TEMP: {
                 float temp = (frame.data.bytes[2] << 8) | frame.data.bytes[1];
-                Serial.print("MC_TEMP = ");
-                Serial.println(temp);
+                // Serial.print("MC_TEMP = ");
+                // Serial.println(temp);
+                Global_MC_temp = temp;
             }
         }
     }
@@ -84,43 +134,50 @@ bool parseFrame(CAN_FRAME &frame) {
     	switch (frame.id) {
     		case BMS_STATUS: {
                 if (frame.data.bytes[0] != 0) {
-                    Serial.println("BMS Error : State of System = 1");
+                    // Serial.println("BMS Error : State of System = 1");
+                    Global_BMS_status = frame.data.bytes[0];
                     // emergency_stop();
                     return false;
                 }
                 else {
-                    Serial.print("BMS State = ");
-                    Serial.println(frame.data.bytes[0]);
+                    // Serial.print("BMS State = ");
+                    // Serial.println(frame.data.bytes[0]);
+                    Global_BMS_status = frame.data.bytes[0];
                 }
     			break;
             }
             case PACK_VOLTAGE: {
                 int voltage = (frame.data.bytes[0] << 8) | frame.data.bytes[1];
-                Serial.print("BMS Voltage = ");
-                Serial.println(voltage);
+                // Serial.print("BMS Voltage = ");
+                // Serial.println(voltage);
+                Global_BMS_voltage = voltage;
                 break;
             }
             case PACK_CURRENT: {
                 int current = (frame.data.bytes[0] << 8) | frame.data.bytes[1];
-                Serial.print("BMS Current = ");
-                Serial.println(current);
+                // Serial.print("BMS Current = ");
+                // Serial.println(current);
+                Global_BMS_current = current;
                 break;
             }
             case PACK_SOC: {
-                Serial.print("BMS SoC (%%) = ");
-                Serial.println(frame.data.bytes[0]);
+                // Serial.print("BMS SoC (%%) = ");
+                // Serial.println(frame.data.bytes[0]);
+                Global_BMS_soc = frame.data.bytes[0];
                 break;
             }
             case PACK_TEMP: {
                 if (frame.data.bytes[0] > MAX_TEMP) {
-                    Serial.print("BMS Error : Battery above MAX_TEMP = ");
+                    // Serial.print("BMS Error : Battery above MAX_TEMP = ");
                     Serial.println(frame.data.bytes[0]);
+                    Global_BMS_temp = frame.data.bytes[0];
                     // emergency_stop();
                     return false;
                 }
                 else {
-                    Serial.print("BMS Temp = ");
-                    Serial.println(frame.data.bytes[0]);
+                    // Serial.print("BMS Temp = ");
+                    // Serial.println(frame.data.bytes[0]);
+                    Global_BMS_temp = frame.data.bytes[0];
                 }
                 break;
             }
@@ -129,14 +186,12 @@ bool parseFrame(CAN_FRAME &frame) {
     return true;
 }
 
-void createTempRequestFrame(CAN_FRAME &frame, int repetition) {
-    if (repetition >= 0) {
-        frame.id = NDRIVE_RXID;
-        frame.length = 3;
-        frame.data.bytes[0] = DS_SERVO;
-        frame.data.bytes[1] = MC_TEMP;
-        frame.data.bytes[2] = repetition;
-    }
+void createTempRequestFrame(CAN_FRAME &frame) {
+    frame.id = NDRIVE_RXID;
+    frame.length = 3;
+    frame.data.bytes[0] = DS_SERVO;
+    frame.data.bytes[1] = MC_TEMP;
+    frame.data.bytes[2] = 0;
 }
 
 void createSpeedRequestFrame(CAN_FRAME &frame, int repetition) {
@@ -174,8 +229,8 @@ void createSpeedWriteFrame(CAN_FRAME &frame, float speed) {
     frame.data.bytes[0] = SPEED_WRITE_ADD;
     frame.data.bytes[1] = (int)speed;
     frame.data.bytes[2] = (int)speed >> 8;
-    Serial.println(speed, HEX);
-    printFrame(frame);
+    // Serial.println(speed, HEX);
+    // printFrame(frame);
 }
 
 void createTorqueWriteFrame(CAN_FRAME &frame, float torque) {
@@ -185,8 +240,8 @@ void createTorqueWriteFrame(CAN_FRAME &frame, float torque) {
     frame.data.bytes[0] = TORQUE_WRITE_ADD;
     frame.data.bytes[1] = (int)torque;
     frame.data.bytes[2] = (int)torque >> 8;
-    Serial.println(torque, HEX);
-    printFrame(frame);
+    // Serial.println(torque, HEX);
+    // printFrame(frame);
 }
 
 void abort_requests(int REGID) {
@@ -326,16 +381,16 @@ const int pedal2_min = 650;  // pedal2 min value in 12-bit range
 const int pedal2_max = 1370; // pedal2 max value in 12-bit range
 
 int get_average_pedal_reading_value() {
-    Serial.print("PEDAL_1 RAW = ");
-    Serial.print(pedal1_raw);
-    Serial.print("      PEDAL_2 RAW = ");
-    Serial.println(pedal2_raw);
+    // Serial.print("PEDAL_1 RAW = ");
+    // Serial.print(pedal1_raw);
+    // Serial.print("      PEDAL_2 RAW = ");
+    // Serial.println(pedal2_raw);
     int reading_1 = get_pedal_reading(pedal1_raw, pedal1_min, pedal1_max);
     int reading_2 = get_pedal_reading(pedal2_raw, pedal2_min, pedal2_max);
-    Serial.print("READING_1 = ");
-    Serial.print(reading_1);
-    Serial.print("      READING_2 = ");
-    Serial.println(reading_2);
+    // Serial.print("READING_1 = ");
+    // Serial.print(reading_1);
+    // Serial.print("      READING_2 = ");
+    // Serial.println(reading_2);
     return get_average_pedal_reading(reading_1,reading_2);
 }
 

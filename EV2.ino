@@ -4,9 +4,10 @@
 #define MAX_THROTTLE 65536
 #define MAX_MC_SPEED 0x7FFF
 
+
 void MC_setup(void)
 {
-    // pin37 rfe, 35 frg
+    // pin37 rfe, 35 frg for DRIVE
     pinMode(37, OUTPUT);
     digitalWrite(37, HIGH);
     pinMode(35, OUTPUT);
@@ -27,57 +28,62 @@ void sendThrottle(void)
 void request_MC_temperature(void)
 {
     CAN_FRAME tempRequest;
-    repetition = 0;
-    createTempRequestFrame(tempRequest,repetition);
+    createTempRequestFrame(tempRequest);
     CAN.sendFrame(tempRequest);   
+}
+
+void request_MC_speed(void)
+{
+    CAN_FRAME speedRequest;
+    int repetition = 100; // 100ms
+    createSpeedRequestFrame(speedRequest,repetition);
+    printFrame(speedRequest);
+    Serial.println();
+    CAN.sendFrame(speedRequest);
+}
+
+void request_MC_torque(void)
+{
+    CAN_FRAME torqueRequest;
+    int repetition = 100; // 100ms
+    createTorqueRequestFrame(torqueRequest,repetition);
+    printFrame(torqueRequest);
+    Serial.println();
+    CAN.sendFrame(torqueRequest);
 }
 
 void setup() {
     
-    // MC_setup();
+    MC_setup();
 
     Serial.begin(115200);
 	CAN_setup();
 
-	CAN_FRAME speedRequest;
-	int repetition = 100; // 100ms
-	createSpeedRequestFrame(speedRequest,repetition);
-    CAN.sendFrame(speedRequest);
+    delay(100);
 
-    CAN_FRAME torqueRequest;
-    repetition = 100; // 100ms
-    createTorqueRequestFrame(torqueRequest,repetition);
-    CAN.sendFrame(torqueRequest);
-
+    request_MC_speed();
+    delay(100);
+    request_MC_torque();
 
 	// adc setup
 	adc_setup();
 
 	//set up hardware interrupt for reading throttle
 	Timer3.attachInterrupt(sendThrottle).setFrequency(1).start();
-    Timer3.attachInterrupt(request_MC_temperature).setFrequency(1).start();
+    Timer4.attachInterrupt(request_MC_temperature).setFrequency(1).start();
+    Timer5.attachInterrupt(updateDB).setFrequency(1).start();
 }
 
 void loop() {
-    // CAN_FRAME temp;
-    // createTempRequestFrame(temp);
-    // CAN.sendFrame(temp);
-
-    // Serial.println("waiting");
-    // delay(1000);
 
     CAN_FRAME incoming;
 
     if (CAN.rx_avail()) {
-        Serial.print("CAN1 ~ ");
         CAN.get_rx_buff(incoming); 
-        printFrame(incoming);
         parseFrame(incoming);
     }
     if (CAN2.rx_avail()) {
-        Serial.print("CAN2 ~ ");
         CAN2.get_rx_buff(incoming); 
-        printFrame(incoming);
         parseFrame(incoming);
     }
 

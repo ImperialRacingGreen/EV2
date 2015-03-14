@@ -24,6 +24,8 @@
 #define CORE_STATUS		0x40
 #define KERN_STATUS		0x181 		// Bit 0 = Drive Enabled, Bit 7 = Position Control, Bit 8 = Speed Control
 
+void updateDB(void);
+
 bool CAN_setup();
 void printFrame(CAN_FRAME &frame);
 bool parseFrame(CAN_FRAME &frame);	// for logging
@@ -35,7 +37,7 @@ void emergency_stop();
 void assert_or_abort(bool condition);
 
 #define SPEED_REPETITION 100
-void createTempRequestFrame(CAN_FRAME &frame, int repetition);
+void createTempRequestFrame(CAN_FRAME &frame);
 void createSpeedRequestFrame(CAN_FRAME &frame, int repetition); // repition in ms
 void createTorqueRequestFrame(CAN_FRAME &frame, int repetition); // repition in ms
 void createCoreStatusRequestFrame(CAN_FRAME &frame);
