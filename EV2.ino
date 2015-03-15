@@ -1,26 +1,20 @@
 #include "EV2_CAN.h"
-#include "DueTimer.h"
-
-#define MAX_THROTTLE 65536
-#define MAX_MC_SPEED 0x7FFF
-
 
 void MC_setup(void)
-{
+{   
     // enable drive
     // 1. RFE (p37)
     pinMode(37, OUTPUT);
-    digitalWrite(37, HIGH);
+    digitalWrite(37, LOW);
     // 2. RFE (p35)
     pinMode(35, OUTPUT);
-    digitalWrite(35, HIGH);
+    digitalWrite(35, LOW);
+    set_rfe_frg(true,true);
 
     // 3. tractive system shutdown relay
     pinMode(33, OUTPUT);
-    digitalWrite(33, HIGH);
-
-    set_rfe_frg(true,true);
-    set_tracsys_relay(true);
+    digitalWrite(33, LOW);
+    set_tracsys_relay(false);
 
     // hardware interrupts for inputs  
     // 1. battery fault (p45)
@@ -34,15 +28,6 @@ void MC_setup(void)
     attachInterrupt(2, inputChanged, CHANGE);
 
     inputChanged();
-}
-
-void sendThrottle(void)
-{   
-    float torque = (get_average_pedal_reading_value()*100);
-    torque /= MAX_THROTTLE;
-    CAN_FRAME outgoing;
-    createTorqueWriteFrame(outgoing,torque/100);
-    CAN.sendFrame(outgoing);
 }
 
 void request_temperatures(void)
@@ -104,12 +89,15 @@ void setup() {
     request_MC_current();
     delay(100);
     request_MC_voltage();
+    delay(100);
 
 	// adc setup
 	adc_setup();
 
+    Timer3.attachInterrupt(checkBrake).setFrequency(2).start();
+
 	//set up hardware interrupt for reading throttle
-	Timer3.attachInterrupt(sendThrottle).setFrequency(1).start();
+	// Timer3.attachInterrupt(sendThrottle).setFrequency(100).start();
     Timer4.attachInterrupt(request_temperatures).setFrequency(1).start();
     // Timer5.attachInterrupt(updateDB).setFrequency(1).start();
 

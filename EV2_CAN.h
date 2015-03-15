@@ -2,7 +2,7 @@
 #define EV2_CAN
 
 #include "due_can.h"
-
+#include "DueTimer.h"
 /**
 * CANBus related constants
 **/
@@ -14,7 +14,9 @@
 #define SPEED_WRITE_ADD		0x31
 #define MAX_SPEED_WRITE 	0x7FFF
 #define TORQUE_WRITE_ADD	0x90
-#define MAX_TORQUE_WRITE	0x7FF8
+#define MAX_TORQUE_WRITE	32760
+
+#define MAX_THROTTLE 65536
 
 // Reading
 #define DS_SERVO		0x3D		//Motor Controller
@@ -65,12 +67,15 @@ void createTorqueWriteFrame(CAN_FRAME &frame, float torque);
 #define HV_V ADC_CHANNEL_2
 #define PEDAL1_ADC_CHANNEL ADC_CHANNEL_7 // this is A0
 #define PEDAL2_ADC_CHANNEL ADC_CHANNEL_6 // this is A1
+#define BRAKE_PEDAL_CHANNEL ADC_CHANNEL_5 // this is A2
 
+void checkBrake(void);
 void adc_setup(void);
 void ADC_Handler(void);
 int get_pedal_reading(const int raw_value, const int min_value, const int max_value);
 int get_average_pedal_reading(const int reading_1, const int reading_2);
 
+int get_average_brake_reading_value();
 int get_average_pedal_reading_value();
 
 void assert_pedal_in_threshold(const int reading_1, const int reading_2, const int threshold);
