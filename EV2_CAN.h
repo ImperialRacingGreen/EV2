@@ -20,11 +20,21 @@
 #define DS_SERVO		0x3D		//Motor Controller
 #define SPEED_READ_ADD	0x30
 #define MAX_SPEED_READ	0x7FFF
-#define MC_TEMP		 	0x4B	
+#define MC_CURRENT_READ	0x20
+#define MC_VOLTAGE_READ	0xEB
+#define MC_TEMP		 	0x4A
+#define MC_AIRTEMP		0x4B
+#define MC_MOTORTEMP 	0x49	
 #define CORE_STATUS		0x40
 #define KERN_STATUS		0x181 		// Bit 0 = Drive Enabled, Bit 7 = Position Control, Bit 8 = Speed Control
 
-void updateDB(void);
+void updateDB(void);	// for user
+void updateDB2(void);	// for serial with andriod
+void updateDB_Processing(void);		// for Dyno test 16/03/15 logging
+
+void set_rfe_frg(bool rfe, bool frg);
+void set_tracsys_relay(bool x);
+void inputChanged(void);
 
 bool CAN_setup();
 void printFrame(CAN_FRAME &frame);
@@ -37,16 +47,22 @@ void emergency_stop();
 void assert_or_abort(bool condition);
 
 #define SPEED_REPETITION 100
-void createTempRequestFrame(CAN_FRAME &frame);
+void createMCTempRequestFrame(CAN_FRAME &frame);
+void createMotorTempRequestFrame(CAN_FRAME &frame);
 void createSpeedRequestFrame(CAN_FRAME &frame, int repetition); // repition in ms
 void createTorqueRequestFrame(CAN_FRAME &frame, int repetition); // repition in ms
+void createCurrentRequestFrame(CAN_FRAME &frame, int repetition); // repition in ms
+void createVoltageRequestFrame(CAN_FRAME &frame, int repetition);
 void createCoreStatusRequestFrame(CAN_FRAME &frame);
+
 void createSpeedWriteFrame(CAN_FRAME &frame, float speed);
 void createTorqueWriteFrame(CAN_FRAME &frame, float torque);
 /**
 *	Pedal Reading
 **/
 // Pedal channels
+#define LV_BATTERY_V ADC_CHANNEL_1
+#define HV_V ADC_CHANNEL_2
 #define PEDAL1_ADC_CHANNEL ADC_CHANNEL_7 // this is A0
 #define PEDAL2_ADC_CHANNEL ADC_CHANNEL_6 // this is A1
 
