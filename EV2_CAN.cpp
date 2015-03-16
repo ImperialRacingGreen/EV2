@@ -210,6 +210,8 @@ void checkBrake() {
     createTorqueWriteFrame(outgoing,0);
     CAN.sendFrame(outgoing);
 
+    get_average_pedal_reading_value();
+
     if (get_average_brake_reading_value() > 30000 && Global_tsa == 1)
     {
         // enable drive
@@ -632,9 +634,9 @@ int get_average_pedal_reading(const int reading_1, const int reading_2) {
 /**
  * Calibrated values
  */
-const int pedal1_min = 690;  // pedal1 min value in 12-bit range
+const int pedal1_min = 750;  // pedal1 min value in 12-bit range
 const int pedal1_max = 1400; // pedal1 max value in 12-bit range
-const int pedal2_min = 650;  // pedal2 min value in 12-bit range
+const int pedal2_min = 750;  // pedal2 min value in 12-bit range
 const int pedal2_max = 1370; // pedal2 max value in 12-bit range
 const int brake_min = 0;
 const int brake_max = 3800;
