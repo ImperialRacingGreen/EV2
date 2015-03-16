@@ -92,5 +92,6 @@ void sendThrottle();
 
 #define MAX_TEMP		100
 #define MIN_TEMP		0
-
+#define MAX_MC_VOLTAGE	500
+#define MAX_MC_CURRENT	300
 #endif

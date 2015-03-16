@@ -9,23 +9,23 @@ void MC_setup(void)
     // 2. RFE (p35)
     pinMode(35, OUTPUT);
     digitalWrite(35, LOW);
-    set_rfe_frg(true,true);
+    set_rfe_frg(false,false);
 
     // 3. tractive system shutdown relay
     pinMode(33, OUTPUT);
-    digitalWrite(33, LOW);
-    set_tracsys_relay(false);
+    digitalWrite(33, HIGH);
+    set_tracsys_relay(true);
 
     // hardware interrupts for inputs  
-    // 1. battery fault (p45)
-    pinMode(45, INPUT);
-    attachInterrupt(0, inputChanged, CHANGE);
-    // 2. isolation fault (p33)
-    pinMode(33, INPUT);
-    attachInterrupt(1, inputChanged, CHANGE);
+    // 1. battery fault (p43)
+    pinMode(43, INPUT);
+    attachInterrupt(43, inputChanged, CHANGE);
+    // 2. isolation fault (p49)
+    pinMode(49, INPUT);
+    attachInterrupt(49, inputChanged, CHANGE);
     // 3. TSA (p45)
     pinMode(45, INPUT);
-    attachInterrupt(2, inputChanged, CHANGE);
+    attachInterrupt(45, inputChanged, CHANGE);
 
     inputChanged();
 }

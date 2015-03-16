@@ -44,10 +44,15 @@ void set_tracsys_relay(bool x)
 
 void inputChanged(void)
 {
+    // hardware interrupts for inputs  
+    // 1. battery fault (p43)
+    // 2. isolation fault (p49)
+    // 3. TSA (p45)
+
     Global_battfault = (int)digitalRead(43);
     Global_isofault = (int)digitalRead(49);
     Global_tsa = (int)digitalRead(45);
-    if (Global_tsa == LOW && car_state == 1) {
+    if (Global_tsa == LOW && (car_state == 1 || car_state == 0)) {
         emergency_stop();
     }
 }
@@ -205,30 +210,33 @@ void checkBrake() {
     createTorqueWriteFrame(outgoing,0);
     CAN.sendFrame(outgoing);
 
-    if (get_average_brake_reading_value() > 30000)
+    if (get_average_brake_reading_value() > 30000 && Global_tsa == 1)
     {
         // enable drive
         // 1. RFE (p37)
+        pinMode(37, OUTPUT);
         digitalWrite(37, HIGH);
         // 2. RFE (p35)
+        pinMode(35, OUTPUT);
         digitalWrite(35, HIGH);
 
         // 3. tractive system shutdown relay
+        pinMode(33, OUTPUT);
         digitalWrite(33, HIGH);
 
         set_rfe_frg(true,true);
         set_tracsys_relay(true);
 
         // hardware interrupts for inputs  
-        // 1. battery fault (p45)
-        pinMode(45, INPUT);
-        attachInterrupt(0, inputChanged, CHANGE);
-        // 2. isolation fault (p33)
-        pinMode(33, INPUT);
-        attachInterrupt(1, inputChanged, CHANGE);
+        // 1. battery fault (p43)
+        pinMode(43, INPUT);
+        attachInterrupt(43, inputChanged, CHANGE);
+        // 2. isolation fault (p49)
+        pinMode(49, INPUT);
+        attachInterrupt(49, inputChanged, CHANGE);
         // 3. TSA (p45)
         pinMode(45, INPUT);
-        attachInterrupt(2, inputChanged, CHANGE);
+        attachInterrupt(45, inputChanged, CHANGE);
 
         inputChanged();
 
@@ -290,6 +298,7 @@ bool parseFrame(CAN_FRAME &frame) {
                 int16_t speed = (frame.data.bytes[2] << 8) | frame.data.bytes[1];
                 // speed = speed * 100 / MAX_SPEED_READ;
                 Global_MC_speed = speed;
+                
                 break;
             }
             case TORQUE_WRITE_ADD: {
@@ -301,11 +310,19 @@ bool parseFrame(CAN_FRAME &frame) {
             case MC_CURRENT_READ: {
                 int16_t current = (frame.data.bytes[2] << 8) | frame.data.bytes[1];
                 Global_MC_current = current;
+                if (current > MAX_MC_CURRENT) {
+                    // emergency_stop();
+                    // return false;
+                }
                 break;
             }
             case MC_VOLTAGE_READ: {
                 int16_t voltage = (frame.data.bytes[2] << 8) | frame.data.bytes[1];
                 Global_MC_voltage = voltage;
+                if (voltage > MAX_MC_VOLTAGE) {
+                    // emergency_stop();
+                    // return false;
+                }
                 break;
             }
             case CORE_STATUS: {
@@ -326,8 +343,6 @@ bool parseFrame(CAN_FRAME &frame) {
                 Global_MC_motortemp = temp;
                 break;
             }
-            
-
         }
     }
     // BMS Related
@@ -337,7 +352,7 @@ bool parseFrame(CAN_FRAME &frame) {
                 if (frame.data.bytes[0] != 0) {
                     // Serial.println("BMS Error : State of System = 1");
                     Global_BMS_status = frame.data.bytes[0];
-                    // emergency_stop();
+                    emergency_stop();
                     return false;
                 }
                 else {
@@ -348,11 +363,13 @@ bool parseFrame(CAN_FRAME &frame) {
             case PACK_VOLTAGE: {
                 int voltage = (frame.data.bytes[0] << 8) | frame.data.bytes[1];
                 Global_BMS_voltage = voltage;
+                
                 break;
             }
             case PACK_CURRENT: {
                 int current = (frame.data.bytes[0] << 8) | frame.data.bytes[1];
                 Global_BMS_current = current;
+                
                 break;
             }
             case PACK_SOC: {
@@ -360,19 +377,15 @@ bool parseFrame(CAN_FRAME &frame) {
                 break;
             }
             case PACK_TEMP: {
-                if (frame.data.bytes[0] > MAX_TEMP) {
-                    Serial.println(frame.data.bytes[0]);
-                    Global_BMS_temp = frame.data.bytes[0];
-                    Global_BMS_mintemp = frame.data.bytes[2];
-                    Global_BMS_maxtemp = frame.data.bytes[3];
+                Global_BMS_temp = frame.data.bytes[0];
+                Global_BMS_mintemp = frame.data.bytes[2];
+                Global_BMS_maxtemp = frame.data.bytes[4];
+
+                if (Global_BMS_maxtemp > MAX_TEMP) {
                     // emergency_stop();
                     return false;
                 }
-                else {
-                    Global_BMS_temp = frame.data.bytes[0];
-                    Global_BMS_mintemp = frame.data.bytes[2];
-                    Global_BMS_maxtemp = frame.data.bytes[3];
-                }
+
                 break;
             }
     	}
@@ -535,7 +548,7 @@ void ADC_Handler(void)
         pedal2_raw = adc_get_channel_value(ADC, PEDAL2_ADC_CHANNEL);
         brake_raw = adc_get_channel_value(ADC, BRAKE_PEDAL_CHANNEL);
 
-        Global_LVBATT_V = adc_get_channel_value(ADC, LV_BATTERY_V);
+        Global_LVBATT_V = adc_get_channel_value(ADC, LV_BATTERY_V)/233.3;;
         Global_HV_V = adc_get_channel_value(ADC, HV_V);
     }
     adc_start(ADC);
@@ -564,8 +577,6 @@ void emergency_stop()
     // 2. send 0 throttle to MC
     CAN_FRAME outgoing;
     createTorqueWriteFrame(outgoing,0);
-    CAN.sendFrame(outgoing);
-    delay(500);
     CAN.sendFrame(outgoing);
 
     // 3. rfe (p37) & frg (p35)
