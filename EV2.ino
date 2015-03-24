@@ -78,7 +78,7 @@ void setup() {
     
     MC_setup();
 
-    Serial.begin(115200);
+    Serial.begin(9600);
 	CAN_setup();
 
     delay(100);
@@ -101,7 +101,8 @@ void setup() {
     Timer4.attachInterrupt(request_temperatures).setFrequency(1).start();
     // Timer5.attachInterrupt(updateDB).setFrequency(1).start();
 
-    Timer5.attachInterrupt(updateDB_Processing).setFrequency(10).start();
+    //Timer5.attachInterrupt(updateDB_Processing).setFrequency(10).start();
+    Timer5.attachInterrupt(updateDB2).setFrequency(10).start();
 }
 
 void loop() {

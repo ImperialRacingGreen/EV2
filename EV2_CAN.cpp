@@ -117,36 +117,56 @@ void updateDB(void)
 
 void updateDB2(void)
 {
+    Serial.print("@");
 
-    Serial.print("MA");
     Serial.print(Global_MC_speed);
-
-    Serial.print("MB");
+    Serial.print(",");
     Serial.print(Global_MC_torque);
-
-    Serial.print("MD");
+    Serial.print(",");
+    Serial.print(Global_MC_motortemp);
+    Serial.print(",");
     Serial.print(Global_MC_temp);
-
-    Serial.print("MB");
+    Serial.print(",");
     Serial.print(Global_MC_voltage);
-
-    Serial.print("MD");
+    Serial.print(",");
     Serial.print(Global_MC_current);
-
-    Serial.print("BA");
+    Serial.print(",");
+    Serial.print(Global_rfe);
+    Serial.print(",");
+    Serial.print(Global_frg);
+    Serial.print(",");
+    
     Serial.print(Global_BMS_voltage);
-
-    Serial.print("BB");
-    Serial.print(Global_BMS_current);
-
-    Serial.print("BC");
-    Serial.print(Global_BMS_soc);
-
-    Serial.print("BD");
+    Serial.print(",");
     Serial.print(Global_BMS_temp);
-
-    Serial.print("BH");
+    Serial.print(",");
+    Serial.print(Global_BMS_mintemp);
+    Serial.print(",");
+    Serial.print(Global_BMS_maxtemp);
+    Serial.print(",");
     Serial.print(Global_BMS_status);
+    Serial.print(",");
+    
+    Serial.print(Global_battfault);
+    Serial.print(",");
+    Serial.print(Global_isofault);
+    Serial.print(",");
+    Serial.print(Global_avethrottle);
+    Serial.print(",");
+    Serial.print(Global_brake);
+    Serial.print(",");
+    Serial.print(Global_LVBATT_V);
+    Serial.print(",");
+    Serial.print(Global_HV_V);
+    Serial.print(",");
+    Serial.print(Global_tsa);
+    Serial.print(",");
+    Serial.print(Global_relay);
+    Serial.print(",");
+    
+    Serial.print(car_state);
+
+    Serial.print("#");
 }
 
 void updateDB_Processing(void)
@@ -184,6 +204,8 @@ void updateDB_Processing(void)
     Serial.print(Global_isofault);
     Serial.print(",");
     Serial.print(Global_avethrottle);
+    Serial.print(",");
+    Serial.print(Global_brake);
     Serial.print(",");
     Serial.print(Global_LVBATT_V);
     Serial.print(",");
@@ -246,6 +268,14 @@ void checkBrake() {
 
         Timer3.stop();
         Timer3.attachInterrupt(sendThrottle).setFrequency(100).start();
+        Timer6.attachInterrupt(checkBrakeThrottle).setFrequency(100).start();
+    }
+}
+
+void checkBrakeThrottle() {
+    if (get_average_brake_reading_value() > 30000 && get_average_pedal_reading_value() > 30000) {
+        car_state = 2;
+        emergency_stop();
     }
 }
 
@@ -575,6 +605,7 @@ void emergency_stop()
 
     // 1. stop sending throttle values
     Timer3.stop();
+    Timer4.stop();
 
     // 2. send 0 throttle to MC
     CAN_FRAME outgoing;
@@ -639,7 +670,7 @@ const int pedal1_max = 1400; // pedal1 max value in 12-bit range
 const int pedal2_min = 750;  // pedal2 min value in 12-bit range
 const int pedal2_max = 1370; // pedal2 max value in 12-bit range
 const int brake_min = 0;
-const int brake_max = 3800;
+const int brake_max = 1200;
 
 int get_average_pedal_reading_value() {
     // Serial.print("PEDAL_1 RAW = ");

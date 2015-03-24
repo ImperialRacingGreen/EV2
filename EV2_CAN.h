@@ -70,6 +70,7 @@ void createTorqueWriteFrame(CAN_FRAME &frame, float torque);
 #define BRAKE_PEDAL_CHANNEL ADC_CHANNEL_5 // this is A2
 
 void checkBrake(void);
+void checkBrakeThrottle(void);
 void adc_setup(void);
 void ADC_Handler(void);
 int get_pedal_reading(const int raw_value, const int min_value, const int max_value);
