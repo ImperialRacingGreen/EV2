@@ -100,7 +100,7 @@ void setup() {
     Timer4.attachInterrupt(request_temperatures).setFrequency(1).start();
 
     // Get Brake and Throttle Values
-    // Timer6.attachInterrupt(checkBrakeThrottle).setFrequency(1).start();
+    Timer6.attachInterrupt(checkBrakeThrottle).setFrequency(1).start();
 
     // Logging Data
     // Timer5.attachInterrupt(updateDB).setFrequency(1).start();

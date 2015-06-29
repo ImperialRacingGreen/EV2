@@ -59,10 +59,10 @@ void enable_drive(bool enable) {
 void set_rfe_frg(bool rfe, bool frg) {
     // RFE (p37)
     pinMode(37, OUTPUT);
-    digitalWrite(37, HIGH);
+    digitalWrite(37, rfe);
     // FRG (p35)
     pinMode(35, OUTPUT);
-    digitalWrite(35, HIGH);
+    digitalWrite(35, frg);
 
     Global_rfe = (int)rfe;
     Global_frg = (int)frg;
@@ -80,7 +80,6 @@ void inputChanged(void) {
     Global_isofault = (int)digitalRead(49);
     Global_tsa = (int)digitalRead(45);
     Global_start_button = (int)digitalRead(41);
-    Global_brake = Global_start_button;
 
     // if tsa not enabled when car in drive state, fault
     if ((Global_tsa == LOW) && (Global_car_state == DRIVE)) {
@@ -366,10 +365,11 @@ void checkStart() {
     // Global_brake = Global_start_button;
 
     // if start button on and tsa on, drive state
-    if (Global_start_button ==  1 && Global_tsa == 1)
+    if (Global_start_button ==  HIGH && Global_tsa == 1)
     {
         // enable drive
 
+        Global_car_state = DRIVE;
         enable_drive(true);
 
         // hardware interrupts for inputs  
@@ -387,8 +387,6 @@ void checkStart() {
         attachInterrupt(41, inputChanged, CHANGE);
 
         inputChanged();
-
-        Global_car_state = DRIVE;
 
         Timer3.stop();
         Timer3.attachInterrupt(sendThrottle).setFrequency(100).start();
@@ -507,7 +505,7 @@ bool parseFrame(CAN_FRAME &frame) {
                 if (frame.data.bytes[0] != 0) {
                     // Serial.println("BMS Error : State of System = 1");
                     Global_BMS_status = frame.data.bytes[0];
-                    emergency_stop();
+                    // emergency_stop();
                     return false;
                 }
                 else {
