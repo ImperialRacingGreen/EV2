@@ -33,6 +33,7 @@
 void updateDB(void);	// for user
 void updateDB2(void);	// for serial with andriod
 void updateDB3(void);	// All variables
+void updateDB4(void);	// Optimisation
 void updateDB_Processing(void);		// for Dyno test 16/03/15 logging
 
 void enable_drive(bool enable);

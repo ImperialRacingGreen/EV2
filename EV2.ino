@@ -58,14 +58,14 @@ void request_MC_torque(void) {
 
 void request_MC_current(void) {
     CAN_FRAME currentRequest;
-    int repetition = 100; // 100ms
+    int repetition = 500; // 100ms
     createCurrentRequestFrame(currentRequest,repetition);
     CAN.sendFrame(currentRequest);
 }
 
 void request_MC_voltage(void) {
     CAN_FRAME voltageRequest;
-    int repetition = 100; // 100ms
+    int repetition = 500; // 100ms
     createVoltageRequestFrame(voltageRequest,repetition);
     CAN.sendFrame(voltageRequest);
 }
@@ -100,13 +100,13 @@ void setup() {
     Timer4.attachInterrupt(request_temperatures).setFrequency(1).start();
 
     // Get Brake and Throttle Values
-    Timer6.attachInterrupt(checkBrakeThrottle).setFrequency(1).start();
+    // Timer6.attachInterrupt(checkBrakeThrottle).setFrequency(1).start();
 
     // Logging Data
     // Timer5.attachInterrupt(updateDB).setFrequency(1).start();
     //Timer5.attachInterrupt(updateDB_Processing).setFrequency(10).start();
     // Timer5.attachInterrupt(updateDB2).setFrequency(10).start();
-    Timer5.attachInterrupt(updateDB3).setFrequency(8).start();
+    Timer5.attachInterrupt(updateDB3).setFrequency(1).start();
 }
 
 void loop() {
