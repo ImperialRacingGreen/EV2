@@ -106,7 +106,7 @@ void setup() {
     // Timer5.attachInterrupt(updateDB).setFrequency(1).start();
     //Timer5.attachInterrupt(updateDB_Processing).setFrequency(10).start();
     // Timer5.attachInterrupt(updateDB2).setFrequency(10).start();
-    Timer5.attachInterrupt(updateDB3).setFrequency(10).start();
+    Timer5.attachInterrupt(updateDB3).setFrequency(8).start();
 }
 
 void loop() {
