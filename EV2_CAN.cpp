@@ -184,8 +184,6 @@ void updateDB2(void) {
     Serial.print(",");
     
     Serial.print(Global_car_state);
-    Serial.print(",");
-    Serial.print(mc_message_count);
 
     Serial.print("#");
 }
@@ -283,6 +281,8 @@ void updateDB4(void) {
     String output ="@";
     // Motor Controller
     output += Global_MC_speed;
+    output += ",";
+    output += Global_MC_kph;
     output += ",";
     output += Global_MC_torque;
     output += ",";
@@ -464,7 +464,7 @@ void idleStateChecks() {
 
     // Update Throttle and Brake Values
     get_average_pedal_reading_value();
-    // get_average_brake_reading_value();
+    get_average_brake_reading_value();
 
     // if start button on and tsa on, drive state
     if (Global_start_button ==  HIGH && Global_tsa == 1)
@@ -476,12 +476,12 @@ void idleStateChecks() {
 
         Timer3.stop();
         Timer3.attachInterrupt(sendThrottle).setFrequency(100).start();
-        // Timer6.attachInterrupt(checkBrakeThrottle).setFrequency(100).start();
+        Timer6.attachInterrupt(checkBrakeThrottle).setFrequency(500).start();
     }
 }
 
 void checkBrakeThrottle() {
-    // get_average_brake_reading_value();
+    get_average_brake_reading_value();
     get_average_pedal_reading_value();
     // if (Global_brake > MAX_BRAKE && Global_avethrottle > 30000) {
     //     emergency_stop();
@@ -603,7 +603,16 @@ bool parseFrame(CAN_FRAME &frame) {
             case PACK_VOLTAGE: {
                 int voltage = (frame.data.bytes[0] << 8) | frame.data.bytes[1];
                 Global_BMS_voltage = voltage;
-                
+                int minVoltage = (frame.data.bytes[2]);
+                Global_BMS_minvoltage = minVoltage;
+                int maxVoltage = (frame.data.bytes[4]);
+                Global_BMS_maxvoltage = maxVoltage;
+
+                // if (minVoltage < x) {
+                //     Global_error = 4;
+                //     emergency_stop();
+                // }
+
                 break;
             }
 
@@ -794,6 +803,14 @@ void ADC_Handler(void) {
     adc_start(ADC);
 }
 
+void checkForFaults(void) {
+    if(Global_LVBATT_V != -1 && Global_LVBATT_V < 12) {
+        Global_error = 3;
+        emergency_stop();
+    }
+
+
+}
 
 /**
  * Emergency functions
@@ -880,7 +897,7 @@ int get_average_pedal_reading_value() {
     Global_throttle1 = pedal1_raw;
     Global_throttle2 = pedal2_raw;
     // Global_avethrottle = get_average_pedal_reading(reading_1,reading_2);
-    Global_avethrottle = get_average_pedal_reading(reading_1,reading_1);
+    Global_avethrottle = get_average_pedal_reading(reading_1,reading_2);
     if (Global_throttle1 < 400) {
         Global_error = 1;
         emergency_stop();
@@ -923,7 +940,7 @@ void assert_pedal_in_threshold(const int reading_1, const int reading_2, const i
 void sendThrottle(void) {
     float torque = get_average_pedal_reading_value();
     torque /= MAX_THROTTLE;
-    // torque *= 0.3
+    torque *= 0.3;
     CAN_FRAME outgoing;
     createTorqueWriteFrame(outgoing,torque);
     CAN.sendFrame(outgoing);

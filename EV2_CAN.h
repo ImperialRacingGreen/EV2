@@ -86,6 +86,7 @@ int get_average_pedal_reading_value();
 void assert_pedal_in_threshold(const int reading_1, const int reading_2, const int threshold);
 void sendThrottle();
 
+void checkForFaults(void);
 /**
 *	BMS Related Constants
 **/
