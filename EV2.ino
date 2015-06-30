@@ -45,6 +45,7 @@ void request_temperatures(void) {
 void request_MC_speed(void) {
     CAN_FRAME speedRequest;
     int repetition = 100; // 100ms
+    // int repetition = 0;
     createSpeedRequestFrame(speedRequest,repetition);
     CAN.sendFrame(speedRequest);
 }
@@ -79,11 +80,13 @@ void MC_request(void) {
     delay(100);
     request_MC_voltage();
     delay(100);
+    request_MC_speed();
+    delay(100);
 }
 
 void setup() {
 
-    Serial.begin(9600);
+    Serial.begin(115200);
     CAN_setup();
 
     MC_setup();
@@ -93,7 +96,7 @@ void setup() {
     adc_setup();
 
     // Check for Start Switch
-    Timer3.attachInterrupt(checkStart).setFrequency(1).start();
+    Timer3.attachInterrupt(idleStateChecks).setFrequency(1).start();
 
     //set up hardware interrupt for reading throttle
     // Timer3.attachInterrupt(sendThrottle).setFrequency(100).start();
@@ -106,7 +109,7 @@ void setup() {
     // Timer5.attachInterrupt(updateDB).setFrequency(1).start();
     //Timer5.attachInterrupt(updateDB_Processing).setFrequency(10).start();
     // Timer5.attachInterrupt(updateDB2).setFrequency(10).start();
-    Timer5.attachInterrupt(updateDB3).setFrequency(1).start();
+    Timer5.attachInterrupt(updateDB3).setFrequency(10).start();
 }
 
 void loop() {

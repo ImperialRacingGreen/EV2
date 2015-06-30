@@ -73,7 +73,7 @@ void createTorqueWriteFrame(CAN_FRAME &frame, float torque);
 #define BRAKE_PEDAL_CHANNEL ADC_CHANNEL_5 // this is A2
 #define MAX_BRAKE 30000
 
-void checkStart(void);
+void idleStateChecks(void);
 void checkBrakeThrottle(void);
 void adc_setup(void);
 void ADC_Handler(void);

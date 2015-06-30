@@ -4,6 +4,7 @@
 /****************************************************************/
 // Motor Controller
 int Global_MC_speed  = -1; // 1 revolution = 0.533m = 0.032 kph
+int Global_MC_kph = -1;
 int Global_MC_torque = -1;        
 int Global_Air_temp = -1;                   
 int Global_MC_temp   = -1;
@@ -73,22 +74,6 @@ void set_tracsys_relay(bool x) {
     digitalWrite(33, x);
 
     Global_relay = (int)x;
-}
-
-void inputChanged(void) {
-    Global_battfault = (int)digitalRead(43);
-    Global_isofault = (int)digitalRead(49);
-    Global_tsa = (int)digitalRead(45);
-    Global_start_button = (int)digitalRead(41);
-
-    // if tsa not enabled when car in drive state, fault
-    if (Global_tsa == 0 && Global_car_state == DRIVE) {
-        emergency_stop();
-    }
-    // if switch off while drive state, fault
-    if(Global_start_button == 0 && Global_car_state == DRIVE) {
-        emergency_stop();
-    }
 }
 
 void updateDB(void) {
@@ -209,6 +194,8 @@ void updateDB3(void) {
     // Motor Controller
     Serial.print(Global_MC_speed);
     Serial.print(",");
+    Serial.print(Global_MC_kph);
+    Serial.print(",");
     Serial.print(Global_MC_torque);
     Serial.print(",");
     Serial.print(Global_Air_temp);
@@ -303,81 +290,82 @@ void updateDB4(void) {
     output += ",";
     output += Global_MC_temp;
     output += ",";
-    Serial.print(Global_MC_motortemp);
-    Serial.print(",");
-    Serial.print(Global_MC_voltage);
-    Serial.print(",");
-    Serial.print(Global_MC_current);
-    Serial.print(",");
-    Serial.print(Global_MC_voltage*Global_MC_current);
-    Serial.print(",");
-    Serial.print(Global_MC_corestatus);
-    Serial.print(",");
-    Serial.print(Global_MC_error);
-    Serial.print(",");
-    Serial.print(mc_message_count);
-    Serial.print(",");
-    Serial.print(Global_rfe);
-    Serial.print(",");
-    Serial.print(Global_frg);
-    Serial.print(",");
-    Serial.print(Global_MC_go);
-    Serial.print(",");
+    output += Global_MC_motortemp;
+    output += ",";
+    output += Global_MC_voltage;
+    output += ",";
+    output += Global_MC_current;
+    output += ",";
+    output += Global_MC_voltage*Global_MC_current;
+    output += ",";
+    output += Global_MC_corestatus;
+    output += ",";
+    output += Global_MC_error;
+    output += ",";
+    output += mc_message_count;
+    output += ",";
+    output += Global_rfe;
+    output += ",";
+    output += Global_frg;
+    output += ",";
+    output += Global_MC_go;
+    output += ",";
     // BMS
-    Serial.print(Global_BMS_voltage);
-    Serial.print(",");
-    Serial.print(Global_BMS_minvoltage);
-    Serial.print(",");
-    Serial.print(Global_BMS_maxvoltage);
-    Serial.print(",");
-    Serial.print(Global_BMS_current);
-    Serial.print(",");
-    Serial.print(Global_BMS_soc);
-    Serial.print(",");
-    Serial.print(Global_BMS_temp);
-    Serial.print(",");
-    Serial.print(Global_BMS_mintemp);
-    Serial.print(",");
-    Serial.print(Global_BMS_maxtemp);
-    Serial.print(",");
-    Serial.print(Global_BMS_status);
-    Serial.print(",");
-    Serial.print(Global_BMS_state);
-    Serial.print(",");
-    Serial.print(Global_BMS_capacity);
-    Serial.print(",");
+    output += Global_BMS_voltage;
+    output += ",";
+    output += Global_BMS_minvoltage;
+    output += ",";
+    output += Global_BMS_maxvoltage;
+    output += ",";
+    output += Global_BMS_current;
+    output += ",";
+    output += Global_BMS_soc;
+    output += ",";
+    output += Global_BMS_temp;
+    output += ",";
+    output += Global_BMS_mintemp;
+    output += ",";
+    output += Global_BMS_maxtemp;
+    output += ",";
+    output += Global_BMS_status;
+    output += ",";
+    output += Global_BMS_state;
+    output += ",";
+    output += Global_BMS_capacity;
+    output += ",";
     // EV2
-    Serial.print(Global_car_state);
-    Serial.print(",");
-    Serial.print(Global_battfault);
-    Serial.print(",");
-    Serial.print(Global_isofault);
-    Serial.print(",");
-    Serial.print(Global_throttle1);
-    Serial.print(",");
-    Serial.print(Global_throttle2);
-    Serial.print(",");
-    Serial.print(Global_avethrottle);
-    Serial.print(",");
-    Serial.print(Global_brake);
-    Serial.print(",");
-    Serial.print(Global_LVBATT_V);
-    Serial.print(",");
-    Serial.print(Global_HV_V);
-    Serial.print(",");
-    Serial.print(Global_error);
-    Serial.print(",");
-    Serial.print(Global_tsa);
-    Serial.print(",");
-    Serial.print(Global_relay);
-    Serial.print(",");
-    Serial.print(Global_high_current);
-    Serial.print(",");
-    Serial.print(Global_insulation_pwm);
-    Serial.print(",");
-    Serial.print(Global_start_button);
+    output += Global_car_state;
+    output += ",";
+    output += Global_battfault;
+    output += ",";
+    output += Global_isofault;
+    output += ",";
+    output += Global_throttle1;
+    output += ",";
+    output += Global_throttle2;
+    output += ",";
+    output += Global_avethrottle;
+    output += ",";
+    output += Global_brake;
+    output += ",";
+    output += Global_LVBATT_V;
+    output += ",";
+    output += Global_HV_V;
+    output += ",";
+    output += Global_error;
+    output += ",";
+    output += Global_tsa;
+    output += ",";
+    output += Global_relay;
+    output += ",";
+    output += Global_high_current;
+    output += ",";
+    output += Global_insulation_pwm;
+    output += ",";
+    output += Global_start_button;
     
-    Serial.print("#");
+    output += "#";
+    Serial.print(output);
 }
 
 void updateDB_Processing(void) {
@@ -437,7 +425,36 @@ volatile int pedal1_raw = -1;
 volatile int pedal2_raw = -1;
 volatile int brake_raw = -1;
 
-void checkStart() {
+void inputChanged(void) {
+    Global_battfault = (int)digitalRead(43);
+    Global_isofault = (int)digitalRead(49);
+    Global_tsa = (int)digitalRead(45);
+    Global_start_button = (int)digitalRead(41);
+
+    // if tsa not enabled when car in drive state, fault
+    if(Global_relay == 1){  
+        if (Global_tsa == 0 && Global_car_state == DRIVE) {
+            Global_error = 2;
+            emergency_stop();
+        }   
+    }
+    // switch turns off drive but not state
+    if(Global_car_state == DRIVE) {
+        if (Global_start_button == 0) {
+            Global_car_state == IDLE;
+            enable_drive(false);
+            Timer3.stop();
+            Timer3.attachInterrupt(idleStateChecks).setFrequency(1).start();
+        }
+    }
+    else if(Global_car_state == IDLE) {
+        if (Global_start_button == 1) {
+            set_tracsys_relay(true);
+        }
+    }
+}
+
+void idleStateChecks() {
     Global_car_state = IDLE;
     
     // MC Torque set to 0
@@ -449,9 +466,6 @@ void checkStart() {
     get_average_pedal_reading_value();
     // get_average_brake_reading_value();
 
-    // Start Switch set to brake for logging purposes
-    // Global_brake = Global_start_button;
-
     // if start button on and tsa on, drive state
     if (Global_start_button ==  HIGH && Global_tsa == 1)
     {
@@ -459,20 +473,6 @@ void checkStart() {
 
         Global_car_state = DRIVE;
         enable_drive(true);
-
-        // hardware interrupts for inputs  
-        // 1. battery fault (p43)
-        pinMode(43, INPUT);
-        attachInterrupt(43, inputChanged, CHANGE);
-        // 2. isolation fault (p49)
-        pinMode(49, INPUT);
-        attachInterrupt(49, inputChanged, CHANGE);
-        // 3. TSA (p45)
-        pinMode(45, INPUT);
-        attachInterrupt(45, inputChanged, CHANGE);
-        // 4. Startup switch (p41)
-        pinMode(41, INPUT);
-        attachInterrupt(41, inputChanged, CHANGE);
 
         Timer3.stop();
         Timer3.attachInterrupt(sendThrottle).setFrequency(100).start();
@@ -538,7 +538,7 @@ bool parseFrame(CAN_FRAME &frame) {
             case SPEED_READ_ADD: {
                 int16_t speed = (frame.data.bytes[2] << 8) | frame.data.bytes[1];
                 Global_MC_speed = 2000 * speed/MAX_SPEED_READ;
-                
+                Global_MC_kph = Global_MC_speed * 0.032;
                 break;
             }
             case TORQUE_WRITE_ADD: {
@@ -814,6 +814,7 @@ void emergency_stop() {
 
     // 3. Disable Drive (RFE, FRG, TSA RELAY)
     enable_drive(false);
+    Timer3.attachInterrupt(checkBrakeThrottle).setFrequency(100).start();
 
     Global_car_state = FAULT;
 }
@@ -858,8 +859,8 @@ int get_average_pedal_reading(const int reading_1, const int reading_2) {
 /**
  * Calibrated values
  */
-const int pedal1_min = 1000;  // pedal1 min value in 12-bit range
-const int pedal1_max = 1700; // pedal1 max value in 12-bit range
+const int pedal1_min = 850;  // pedal1 min value in 12-bit range
+const int pedal1_max = 1650; // pedal1 max value in 12-bit range
 const int pedal2_min = 1000;  // pedal2 min value in 12-bit range
 const int pedal2_max = 1700; // pedal2 max value in 12-bit range
 const int brake_min = 0;
@@ -878,7 +879,12 @@ int get_average_pedal_reading_value() {
     // Serial.println(reading_2);
     Global_throttle1 = pedal1_raw;
     Global_throttle2 = pedal2_raw;
-    Global_avethrottle = get_average_pedal_reading(reading_1,reading_2);
+    // Global_avethrottle = get_average_pedal_reading(reading_1,reading_2);
+    Global_avethrottle = get_average_pedal_reading(reading_1,reading_1);
+    if (Global_throttle1 < 400) {
+        Global_error = 1;
+        emergency_stop();
+    }
     return Global_avethrottle;
 }
 
@@ -917,7 +923,7 @@ void assert_pedal_in_threshold(const int reading_1, const int reading_2, const i
 void sendThrottle(void) {
     float torque = get_average_pedal_reading_value();
     torque /= MAX_THROTTLE;
-    torque *= 0.3;
+    // torque *= 0.3
     CAN_FRAME outgoing;
     createTorqueWriteFrame(outgoing,torque);
     CAN.sendFrame(outgoing);
