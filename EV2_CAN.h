@@ -32,8 +32,11 @@
 
 void updateDB(void);	// for user
 void updateDB2(void);	// for serial with andriod
+void updateDB3(void);	// All variables
+void updateDB4(void);	// Optimisation
 void updateDB_Processing(void);		// for Dyno test 16/03/15 logging
 
+void enable_drive(bool enable);
 void set_rfe_frg(bool rfe, bool frg);
 void set_tracsys_relay(bool x);
 void inputChanged(void);
@@ -68,8 +71,9 @@ void createTorqueWriteFrame(CAN_FRAME &frame, float torque);
 #define PEDAL1_ADC_CHANNEL ADC_CHANNEL_7 // this is A0
 #define PEDAL2_ADC_CHANNEL ADC_CHANNEL_6 // this is A1
 #define BRAKE_PEDAL_CHANNEL ADC_CHANNEL_5 // this is A2
+#define MAX_BRAKE 30000
 
-void checkBrake(void);
+void idleStateChecks(void);
 void checkBrakeThrottle(void);
 void adc_setup(void);
 void ADC_Handler(void);
@@ -82,6 +86,7 @@ int get_average_pedal_reading_value();
 void assert_pedal_in_threshold(const int reading_1, const int reading_2, const int threshold);
 void sendThrottle();
 
+void checkForFaults(void);
 /**
 *	BMS Related Constants
 **/
