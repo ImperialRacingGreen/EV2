@@ -428,12 +428,18 @@ volatile int brake_raw = -1;
 void inputChanged(void) {
     Global_battfault = (int)digitalRead(43);
     Global_isofault = (int)digitalRead(49);
-    Global_tsa = (int)digitalRead(45);
     Global_start_button = (int)digitalRead(41);
+
+    if (Global_tsa == 1 && (int)digitalRead(45) == 0) {
+        Global_error = 5;
+        emergency_stop();
+    }
+
+    Global_tsa = (int)digitalRead(45);
 
     // if tsa not enabled when car in drive state, fault
     if(Global_relay == 1){  
-        if (Global_tsa == 0 && Global_car_state == DRIVE) {
+        if (Global_tsa == 0 && (Global_car_state == DRIVE)) {
             Global_error = 2;
             emergency_stop();
         }   
@@ -580,7 +586,7 @@ bool parseFrame(CAN_FRAME &frame) {
             }
             case MC_MOTORTEMP: {
                 float temp = (frame.data.bytes[2] << 8) | frame.data.bytes[1];
-                Global_MC_motortemp = temp;
+                Global_MC_motortemp = (temp - 10110)/51.7;
                 break;
             }
         }
@@ -940,7 +946,7 @@ void assert_pedal_in_threshold(const int reading_1, const int reading_2, const i
 void sendThrottle(void) {
     float torque = get_average_pedal_reading_value();
     torque /= MAX_THROTTLE;
-    torque *= 0.3;
+    // torque *= 0.3;
     CAN_FRAME outgoing;
     createTorqueWriteFrame(outgoing,torque);
     CAN.sendFrame(outgoing);
