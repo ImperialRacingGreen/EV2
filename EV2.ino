@@ -1,345 +1,130 @@
-#include "rg_fsm.h"
-#include "SimpleTimer.h"
-#include "Firmata.h"
 #include "EV2_CAN.h"
-#include "DueTimer.h"
-//------------------------------------
-byte portStatus[TOTAL_PORTS];	// each bit: 1=pin is digital input, 0=other/ignore
-byte previousPINs[TOTAL_PORTS];
 
-void sendPort(byte portNumber, byte portValue)
-{
-  portValue = portValue & portStatus[portNumber];
-  if (previousPINs[portNumber] != portValue) {
-    /*FIRMATA Firmata.sendDigitalPort(portNumber, portValue);*/
-    previousPINs[portNumber] = portValue;
-  }
+void MC_setup(void)
+{   
+    // 1. RFE (p37)
+    pinMode(37, OUTPUT);
+    digitalWrite(37, LOW);
+    // 2. RFE (p35)
+    pinMode(35, OUTPUT);
+    digitalWrite(35, LOW);
+    set_rfe_frg(false,false);
+    // 3. tractive system shutdown relay
+    pinMode(33, OUTPUT);
+    digitalWrite(33, HIGH);
+    set_tracsys_relay(true);
+
+    // Startup switch
+    pinMode(41, INPUT);
+    attachInterrupt(41, inputChanged, CHANGE);
+
+    // hardware interrupts for inputs  
+    // 1. battery fault (p43)
+    pinMode(43, INPUT);
+    attachInterrupt(43, inputChanged, CHANGE);
+    // 2. isolation fault (p49)
+    pinMode(49, INPUT);
+    attachInterrupt(49, inputChanged, CHANGE);
+    // 3. TSA (p45)
+    pinMode(45, INPUT);
+    attachInterrupt(45, inputChanged, CHANGE);
+
+    inputChanged();
 }
 
-//---------------------------------
+void request_temperatures(void) {
+    CAN_FRAME MCtempRequest;
+    createMCTempRequestFrame(MCtempRequest);
+    CAN.sendFrame(MCtempRequest); 
 
-//types.h removed as already included in rg_fsm.h
-
-#define PWM_FREQUENCY               2
-#define MAX_DUTY_CYCLE              1000
-#define BIT_CONVERSION_CONSTANT (3.3/1024)
- 
-//ADC CHANNELS
-float CHANNEL_0_REG = 0; 
-float CHANNEL_1_REG = 0;
-float CHANNEL_2_REG = 0;
-float CHANNEL_3_REG = 0;
-float CHANNEL_4_REG = 0;
-float CHANNEL_5_REG = 0;
-float CHANNEL_6_REG = 0;
-float CHANNEL_7_REG = 0;
-float CHANNEL_8_REG = 0;
-float CHANNEL_9_REG = 0;
-
-//STATE DECLARATION
-State startUpState;
-State driveState;
-State shutDownState;
-State idleState;
-
-
-//FSM DECLARATION
-Machine car;
-
-//ARDUINO OUTPUT
-int led1 = 13;
-int led2 = 12;
-
-int dig7 = 7;
-int dig2 = 2;
-int dig3 = 3;
-
-byte pin;
-
-//timer objec
-SimpleTimer printVals;
-SimpleTimer readVals;
-
-void analogWriteCallback(byte pin, int value)
-{
-  if (IS_PIN_PWM(pin)) {
-    pinMode(PIN_TO_DIGITAL(pin), OUTPUT);
-    analogWrite(PIN_TO_PWM(pin), value);
-  }
+    CAN_FRAME MCmotortempRequest;
+    createMotorTempRequestFrame(MCmotortempRequest);
+    CAN.sendFrame(MCmotortempRequest);  
 }
 
-void setup() 
-{
-  // Testing
-  Serial.begin(115200);
-  
-  byte i, port, status;
-  
-  
-  // put your setup code here, to run once:
-  // Firmata.setFirmwareVersion(0, 1);
-  
-   for (pin = 0; pin < TOTAL_PINS; pin++) {
-    if IS_PIN_DIGITAL(pin) pinMode(PIN_TO_DIGITAL(pin), INPUT);
-  }
-
-  for (port = 0; port < TOTAL_PORTS; port++) {
-    status = 0;
-    for (i = 0; i < 8; i++) {
-      if (IS_PIN_DIGITAL(port * 8 + i)) status |= (1 << i);
-    }
-    portStatus[port] = status;
-  }
-
-  /*
-  Firmata.attach(ANALOG_MESSAGE, analogWriteCallback);
-  
-  Firmata.begin(57600);
-  */
-  
-  //assigning handler and check routine functions
-  startUpState.setCheckRoutines(startUpStateCheckRoutine);
-  startUpState.setStateHandler(startUpStateHandler);
-
-  driveState.setCheckRoutines(driveStateCheckRoutine);
-  driveState.setStateHandler(driveStateHandler);
-
-  shutDownState.setCheckRoutines(shutDownStateCheckRoutine);
-  shutDownState.setStateHandler(shutDownStateHandler);
-  
-  idleState.setCheckRoutines(idleStateCheckRoutine);
-  idleState.setStateHandler(idleStateHandler);
-  
-  //arduino output setup
-  pinMode(led1, OUTPUT);
-  pinMode(led2, OUTPUT);
-  
-  //timer output
-  //printVals.setInterval(1000,printValsHandler);
-  readVals.setInterval(100,readValsHandler);
-  
-  //default initial state is idel state
-  car.setStateInOperation(idleState);
-
-  //CAN Setup
-  if (!CAN_setup())
-    Serial.println("CAN initialization (sync) ERROR");
-  else
-    Serial.println("Setup Done");
-
-  //ADC setup
-  adc_setup();
+void request_MC_speed(void) {
+    CAN_FRAME speedRequest;
+    int repetition = 100; // 100ms
+    // int repetition = 0;
+    createSpeedRequestFrame(speedRequest,repetition);
+    CAN.sendFrame(speedRequest);
 }
 
-byte analogPin = 0;
-byte digitalPin = 0;
+void request_MC_torque(void) {
+    CAN_FRAME torqueRequest;
+    int repetition = 100; // 100ms
+    createTorqueRequestFrame(torqueRequest,repetition);
+    CAN.sendFrame(torqueRequest);
+}
 
-void loop() 
-{
-  car.driveMafakaas();
-  readVals.run();
+void request_MC_current(void) {
+    CAN_FRAME currentRequest;
+    int repetition = 500; // 100ms
+    createCurrentRequestFrame(currentRequest,repetition);
+    CAN.sendFrame(currentRequest);
+}
 
-  if(car.getNextStateId() == STARTUP_STATE)
-    car.setStateInOperation(startUpState);
-  if(car.getNextStateId() == DRIVE_STATE)
-    car.setStateInOperation(driveState);
-  if(car.getNextStateId() == SHUT_DOWN_STATE)
-    car.setStateInOperation(shutDownState);
-  if(car.getNextStateId() == IDLE_STATE)
-    car.setStateInOperation(idleState);
+void request_MC_voltage(void) {
+    CAN_FRAME voltageRequest;
+    int repetition = 500; // 100ms
+    createVoltageRequestFrame(voltageRequest,repetition);
+    CAN.sendFrame(voltageRequest);
+}
+
+void MC_request(void) {
+    request_MC_speed();
+    delay(100);
+    request_MC_torque();
+    delay(100);
+    request_MC_current();
+    delay(100);
+    request_MC_voltage();
+    delay(100);
+    request_MC_speed();
+    delay(100);
+}
+
+void setup() {
+
+    Serial.begin(115200);
+    CAN_setup();
+
+    MC_setup();
+    MC_request();
     
-  //printCurrentState(car);
+    // adc setup
+    adc_setup();
 
-  // Testing
-  int incomingByte = 0;
-  Serial.print("CAN2 Output : ");
-  while(true) {
-    if (Serial.available() > 0) {
-      incomingByte = Serial.parseInt();
-      Serial.print("Received: ");
-      Serial.println(incomingByte,HEX);
+    // Check for Start Switch
+    Timer3.attachInterrupt(idleStateChecks).setFrequency(1).start();
 
-      CAN_FRAME outFrame;
-      createFrame(outFrame,NDRIVE_TXID,3,DS_SERVO,129,1);
-      printFrame(outFrame);
-      CAN2.sendFrame(outFrame);
+    //set up hardware interrupt for reading throttle
+    // Timer3.attachInterrupt(sendThrottle).setFrequency(100).start();
+    Timer4.attachInterrupt(request_temperatures).setFrequency(1).start();
 
-      break;
-    }
-  }
+    // Get Brake and Throttle Values
+    // Timer6.attachInterrupt(checkBrakeThrottle).setFrequency(1).start();
+
+    // Logging Data
+    // Timer5.attachInterrupt(updateDB).setFrequency(1).start();
+    //Timer5.attachInterrupt(updateDB_Processing).setFrequency(10).start();
+    // Timer5.attachInterrupt(updateDB2).setFrequency(10).start();
+    Timer5.attachInterrupt(updateDB3).setFrequency(10).start();
 }
 
+void loop() {
 
-void readValsHandler(){
-  analogReadResolution(10);
-  CHANNEL_0_REG = analogRead(7);
-  CHANNEL_1_REG = analogRead(6);
-  CHANNEL_2_REG = analogRead(5);
-  CHANNEL_3_REG = analogRead(4);
-  CHANNEL_4_REG = analogRead(3);
-  CHANNEL_5_REG = analogRead(2);
-  CHANNEL_6_REG = analogRead(1);
-  CHANNEL_7_REG = analogRead(0);
-}
-  
-//state handlers, state handlers contain current state and next state id
+    CAN_FRAME incoming;
 
-void startUpStateHandler(state_id &currentState, state_id &nextState){
-  
-  currentState = STARTUP_STATE;
-  nextState = DRIVE_STATE;
-  
-  digitalWrite(led1, HIGH);
-  digitalWrite(led2, LOW);
-  
-  Serial.print("start up state handler\n");
-
-  CAN_FRAME outgoing;
-
-  createSpeedRequestFrame(outgoing,SPEED_REPETITION);
-  CAN.sendFrame(outgoing);
-
-  // setup interrupt for pedal (every x milliseconds send throttle data to MC)
-
-  Timer3.attachInterrupt(sendThrottle).start(1000);
-}
-
-void driveStateHandler(state_id &currentState, state_id &nextState){
-
-  currentState = DRIVE_STATE;
-  nextState = SHUT_DOWN_STATE;
-
-  digitalWrite(led1,LOW);
-  digitalWrite(led2,HIGH);
-
-  Serial.print("drive state handler\n");
-}
-
-void shutDownStateHandler(state_id &currentState, state_id &nextState){
-
-  currentState = SHUT_DOWN_STATE;
-  nextState = IDLE_STATE;
-
-  digitalWrite(led1,HIGH);
-  digitalWrite(led2,HIGH);
-
-  Serial.print("shut down state handler\n"); 
-}
-
-void idleStateHandler(state_id &currentState, state_id &nextState){
-
-  currentState = IDLE_STATE;
-  nextState = STARTUP_STATE;
-        
-  digitalWrite(led2,LOW);
-  digitalWrite(led1,LOW);
-  Serial.print("state handler functoin\n");
-}
-
-//state check routines
-void startUpStateCheckRoutine(bool &nextStateAssert){
-  
-  Serial.print("Start up state check routine\n");
-  
-  if(CHANNEL_0_REG*BIT_CONVERSION_CONSTANT < 2.2)
-    nextStateAssert = true;
-  else
-    nextStateAssert = false;
-
-  // Check if core status OK
-  CAN_FRAME outgoing;
-  
-  createCoreStatusRequestFrame(outgoing);
-  CAN.sendFrame(outgoing);
-  delayMicroseconds(100);
-
-  bool ndrive_ok = false;
-  bool bmsstatus_ok = false;
-  bool bmstemp_ok = false;
-  bool bmssoc = false;
-  
-  while(!(ndrive_ok && bmsstatus_ok && bmstemp_ok && bmssoc)) {
-    CAN_FRAME inFrame;
     if (CAN.rx_avail()) {
-      CAN.get_rx_buff(inFrame);
-      // Check core status
-      if (inFrame.id == NDRIVE_TXID) {
-        if (inFrame.data.bytes[0] == DS_SERVO) {
-          if (inFrame.data.bytes[1] == KERN_STATUS) {
-            nextStateAssert = true;
-            ndrive_ok = true;
-          }
-          else {
-            nextStateAssert = false;
-            Serial.println("NDRIVE Error : not KERN_STATUS");
-          }
-        }
-      }
-      // Check BMS State
-      else if(inFrame.id == BMS_STATUS) {
-        if (inFrame.data.bytes[0] == 0) {
-          bmsstatus_ok = true;
-          nextStateAssert = true;
-        }
-        else {
-          Serial.println("BMS Error : State of System = 1");
-          nextStateAssert = false;
-        }
-      }
-      // Check Battery Temperature
-      else if(inFrame.id == PACK_TEMP) {
-        if (inFrame.data.bytes[0] < MAX_TEMP) {
-          bmstemp_ok = true;
-          nextStateAssert = true;
-        }
-        else {
-          Serial.print("BMS Error : Battery above MAX_TEMP = ");
-          Serial.println(inFrame.data.bytes[0]);
-          nextStateAssert = false;
-        }
-      }
-      // Display Pack SoC
-      else if(inFrame.id == PACK_SOC) {
-        bmssoc = true;
-        Serial.print("BMS SoC (%%) = ");
-        Serial.println(inFrame.data.bytes[0]);
-      }
+        CAN.get_rx_buff(incoming); 
+        // printFrame(incoming);
+        parseFrame(incoming);
     }
-  }
-}
+    if (CAN2.rx_avail()) {
+        CAN2.get_rx_buff(incoming); 
+        // printFrame(incoming);
+        parseFrame(incoming);
+    }
 
-void driveStateCheckRoutine(bool &nextStateAssert){
-  
-  Serial.print("drive state check routine\n");
-
-  if(CHANNEL_1_REG*BIT_CONVERSION_CONSTANT < 2.2)
-    nextStateAssert = true;
-  else
-    nextStateAssert = false;
-  
-  CAN_FRAME inFrame;
-  while (CAN.rx_avail()) {
-    CAN.get_rx_buff(inFrame);
-    nextStateAssert = parseFrame(inFrame);
-  }
-}
-
-void shutDownStateCheckRoutine(bool &nextStateAssert){
-
-  Serial.print("shut down state check routine\n"); 
-	
-  if(CHANNEL_2_REG*BIT_CONVERSION_CONSTANT < 2.2)
-    nextStateAssert = true;
-  else
-    nextStateAssert = false;
-}
-
-void idleStateCheckRoutine(bool &nextStateAssert){
-  
-  Serial.print("idle state check routine\n");
-
-  if(CHANNEL_3_REG*BIT_CONVERSION_CONSTANT < 2.2)
-    nextStateAssert = true;
-  else
-    nextStateAssert = false;
 }
