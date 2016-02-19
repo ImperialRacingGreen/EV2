@@ -69,6 +69,7 @@ typedef struct {
 #ifndef _CAN_LIBRARY_
 #define _CAN_LIBRARY_
 
+#include "variant.h"
 #include "sn65hvd234.h"
 
 //add some extra stuff that is needed for Arduino 1.5.2
