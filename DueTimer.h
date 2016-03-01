@@ -12,7 +12,7 @@
 #ifndef DueTimer_h
 #define DueTimer_h
 
-#include "Arduino.h"
+#include "variant.h"
 
 #include <inttypes.h>
 
