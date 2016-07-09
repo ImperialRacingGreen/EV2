@@ -1,33 +1,33 @@
 #include "EV2_CAN.h"
 
-void MC_setup(void) {   
-    // 1. RFE (p37) 2. FRG (p35)
-    pinMode(37, OUTPUT);
-    pinMode(35, OUTPUT);
-    set_rfe_frg(false,false);
+void pin_setup(void) {
+    // Inputs
+    pinMode(DBSSTSD, INPUT);
+    pinMode(BATFLT, INPUT);
+    pinMode(TSA, INPUT);
+    pinMode(IMDSTIN, INPUT);
+    pinMode(IMDDIN, INPUT);
 
-    // 3. tractive system shutdown relay
-    pinMode(33, OUTPUT);
+    // Outputs
+    pinMode(SPKR, OUTPUT);
+    pinMode(MCRFE, OUTPUT);
+    pinMode(MCFRG, OUTPUT);
+    pinMode(TSDUESD, OUTPUT);
+}
+
+void MC_setup(void) {  
+    set_rfe_frg(false,false);
     set_tracsys_relay(true);
 }
 
 void EV2_setup(void) {
-    // Startup switch
-    pinMode(41, INPUT);
-    attachInterrupt(41, inputChanged, CHANGE);
-
-    // hardware interrupts for inputs  
-    // 1. battery fault (p43)
-    pinMode(43, INPUT);
-    attachInterrupt(43, inputChanged, CHANGE);
-    // 2. isolation fault (p49)
-    pinMode(49, INPUT);
-    attachInterrupt(49, inputChanged, CHANGE);
-    // 3. TSA (p45)
-    pinMode(45, INPUT);
-    attachInterrupt(45, inputChanged, CHANGE);
+    attachInterrupt(DBSSTSD, setDriveState, CHANGE);
+    attachInterrupt(BATFLT, inputChanged, CHANGE);
+    attachInterrupt(IMDSTIN, inputChanged, CHANGE);
+    attachInterrupt(TSA, tsaChanged, CHANGE);
 
     inputChanged();
+    tsaChanged();
 }
 
 void slow_requests(void) {
@@ -40,17 +40,17 @@ void slow_requests(void) {
 void request_temperatures(void) {
     CAN_FRAME MCtempRequest;
     createMCTempRequestFrame(MCtempRequest);
-    CAN.sendFrame(MCtempRequest); 
+    Can1.sendFrame(MCtempRequest); 
 
     CAN_FRAME MCmotortempRequest;
     createMotorTempRequestFrame(MCmotortempRequest);
-    CAN.sendFrame(MCmotortempRequest);  
+    Can1.sendFrame(MCmotortempRequest);  
 }
 
 void request_MC_status(void) {
     CAN_FRAME MCstatusRequest;
     createCoreStatusRequestFrame(MCstatusRequest);
-    CAN.sendFrame(MCstatusRequest);     
+    Can1.sendFrame(MCstatusRequest);     
 }
 
 void MC_request(void) {
@@ -66,7 +66,8 @@ void MC_request(void) {
 }
 
 void setup() {
-    CAN_setup();
+    pin_setup();
+    while(!CAN_setup()){};
     EV2_setup();
 
     MC_setup();
@@ -79,33 +80,39 @@ void setup() {
     setIdleState();
 
     //set up hardware interrupt for reading throttle
-    Timer4.attachInterrupt(slow_requests).setFrequency(2).start();
-
-    // Logging Data
-    Timer.getAvailable().attachInterrupt(updateDB3).setFrequency(10).start();
-    Serial.begin(115200);
+    Timer4.attachInterrupt(slow_requests).setFrequency(1).start();
+    Timer6.attachInterrupt(checkForFaults).setFrequency(1).start();
     
-    // Timer5.attachInterrupt(updateDB5).setFrequency(10).start();
-    // SerialUSB.begin(115200);
+    Serial.begin(115200);
+    Timer5.attachInterrupt(updateTime).setFrequency(50).start();
+    delay(100);
 
-    // Timer5.attachInterrupt(updateDB4).setFrequency(10).start();
-
-    MC_request();
-
-    Timer6.attachInterrupt(checkCANComms).setFrequency(1).start();
-
+    pinMode(23, OUTPUT);
+    pinMode(22, OUTPUT);
 }
 
+int time_x = 0;
 void loop() {
+    if(time_x == 0){
+        updateDB();
+        slow_requests();
+    }
     CAN_FRAME incoming;
-    if (CAN.rx_avail()) {
-        CAN.get_rx_buff(incoming); 
-        // printFrame(incoming);
+    if (Can0.available()) {
+        digitalWrite(23, HIGH);
+        Can0.read(incoming); 
         parseFrame(incoming);
+        digitalWrite(23, LOW);
     }
-    if (CAN2.rx_avail()) {
-        CAN2.get_rx_buff(incoming); 
-        // printFrame(incoming);
+    if (Can1.available()) {
+        digitalWrite(22, HIGH);
+        Can1.read(incoming); 
         parseFrame(incoming);
+        digitalWrite(22, LOW);
     }
+}
+
+void updateTime() {
+    time_x += 1;
+    time_x = time_x % 50;
 }

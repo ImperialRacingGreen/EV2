@@ -1,5 +1,4 @@
 #include "EV2_CAN.h"
-#include "math.h"
 
 /****************************************************************/
 /**
@@ -7,56 +6,57 @@
  * -------------------
  */
 // Motor Controller
-int Global_MC_speed  = -1; // 1 revolution = 0.533m = 0.032 kph //RPM
-int Global_MC_kph = -1;
-int Global_MC_torque = -1;        
-int Global_Air_temp = -1;                   
-int Global_MC_temp   = -1;
-int Global_MC_motortemp = -1;
-int Global_MC_voltage = -1;
-int Global_MC_current = -1;
-int Global_MC_power = -1;
-int Global_MC_corestatus = -1;
-int Global_MC_error = -1;
-int Global_rfe = -1;
-int Global_frg = -1;
-int Global_MC_go = -1;
+volatile int Global_MC_speed  = -1; // 1 revolution = 0.533m = 0.032 kph //RPM
+volatile int Global_MC_kph = -1;
+volatile int Global_MC_torque = -1;        
+volatile int Global_Air_temp = -1;                   
+volatile int Global_MC_temp   = -1;
+volatile int Global_MC_motortemp = -1;
+volatile int Global_MC_voltage = -1;
+volatile int Global_MC_current = -1;
+volatile int Global_MC_power = -1;
+volatile int Global_MC_corestatus = -1;
+volatile int Global_MC_error = -1;
+volatile int Global_rfe = -1;
+volatile int Global_frg = -1;
+volatile int Global_MC_go = -1;
 
 // BMS
-int Global_BMS_voltage = -1;
-float Global_BMS_minvoltage = -1;
-float Global_BMS_maxvoltage = -1;
-int Global_BMS_current = -1;
-int Global_BMS_soc = -1;
-int Global_BMS_temp = -1;
-int Global_BMS_mintemp = -1;
-int Global_BMS_maxtemp = -1;
-int Global_BMS_status = -1;
-int Global_BMS_state = -1;
-int Global_BMS_fault = -1;
-int Global_BMS_capacity = -1;
+volatile int Global_BMS_voltage = -1;
+volatile float Global_BMS_minvoltage = -1;
+volatile float Global_BMS_maxvoltage = -1;
+volatile int Global_BMS_current = -1;
+volatile int Global_BMS_soc = -1;
+volatile int Global_BMS_temp = -1;
+volatile int Global_BMS_mintemp = -1;
+volatile int Global_BMS_maxtemp = -1;
+volatile int Global_BMS_status = -1;
+volatile int Global_BMS_state = -1;
+volatile int Global_BMS_fault = -1;
+volatile int Global_BMS_capacity = -1;
 
 // EV2
-int Global_car_state = -1;
+volatile int Global_car_state = -1;
 #define IDLE 0
 #define DRIVE 1
 #define FAULT 2
-int Global_battfault = -1;
-int Global_isofault = -1;
-int Global_throttle1 = -1;
-int Global_throttle2 = -1;
-int Global_avethrottle = -1;
-int Global_brake = -1;
-float Global_LVBATT_V = -1;
-float Global_LVTEMP = -1;
-float Global_HV_V = -1;
+volatile int Global_battfault = -1;
+volatile int Global_insufault = -1;
+volatile int Global_throttle1 = -1;
+volatile int Global_throttle2 = -1;
+volatile int Global_avethrottle = -1;
+volatile int Global_brake = -1;
+volatile float Global_LVBATT_V12 = -1;
+volatile float Global_LVBATT_V24 = -1;
+volatile float Global_LVBATT_TEMP = -1;
+volatile float Global_HV_V = -1;
 String Global_error = "OK";
-int Global_tsa = -1;
-int Global_relay = -1;
-int Global_high_current = -1;
-int Global_insulation_pwm = -1;
-int Global_start_button = -1;
-bool throttleEnable = true;
+volatile int Global_tsa = -1;
+volatile int Global_relay = -1;
+volatile float Global_high_current = -1;
+volatile int Global_insulation_pwm = -1;
+volatile int Global_start_button = -1;
+volatile bool throttleEnable = true;
 
 // Comms
 unsigned int mc_message_count = 0;
@@ -69,7 +69,8 @@ unsigned int conditionCounter = 0;
 bool speakerFirstToggle = true;
 bool speakerOn = false;
 
-void updateDB3(void) {
+void updateDB(void) {
+    digitalWrite(52, HIGH);
     Serial.print("@");
     // Motor Controller
     Serial.print(Global_MC_speed);
@@ -130,7 +131,7 @@ void updateDB3(void) {
     Serial.print(",");
     Serial.print(Global_battfault);
     Serial.print(",");
-    Serial.print(Global_isofault);
+    Serial.print(Global_insufault);
     Serial.print(",");
     Serial.print(Global_throttle1);
     Serial.print(",");
@@ -140,7 +141,9 @@ void updateDB3(void) {
     Serial.print(",");
     Serial.print(Global_brake);
     Serial.print(",");
-    Serial.print(Global_LVBATT_V);
+    Serial.print(Global_LVBATT_V12);
+    Serial.print(",");
+    Serial.print(Global_LVBATT_V24);
     Serial.print(",");
     Serial.print(Global_HV_V);
     Serial.print(",");
@@ -157,9 +160,12 @@ void updateDB3(void) {
     Serial.print(Global_start_button);
     
     Serial.print("#");
+    Serial.flush();
+    digitalWrite(52, LOW);
 }
-void updateDB4(void) {
-    String output ="@";
+
+String getDB() {
+    String output = "@";
     // Motor Controller
     output += Global_MC_speed;
     output += ",";
@@ -219,7 +225,7 @@ void updateDB4(void) {
     output += ",";
     output += Global_battfault;
     output += ",";
-    output += Global_isofault;
+    output += Global_insufault;
     output += ",";
     output += Global_throttle1;
     output += ",";
@@ -229,7 +235,9 @@ void updateDB4(void) {
     output += ",";
     output += Global_brake;
     output += ",";
-    output += Global_LVBATT_V;
+    output += Global_LVBATT_V12;
+    output += ",";
+    output += Global_LVBATT_V24;
     output += ",";
     output += Global_HV_V;
     output += ",";
@@ -246,96 +254,8 @@ void updateDB4(void) {
     output += Global_start_button;
     
     output += "#";
-    Serial.print(output);
-}
-void updateDB5(void) {
-    SerialUSB.print("@");
-    // Motor Controller
-    SerialUSB.print(Global_MC_speed);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_MC_kph);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_MC_torque);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_Air_temp);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_MC_temp);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_MC_motortemp);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_MC_voltage);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_MC_current);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_MC_power);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_MC_corestatus);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_MC_error);
-    SerialUSB.print(",");
-    SerialUSB.print(mc_message_count);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_rfe);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_frg);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_MC_go);
-    SerialUSB.print(",");
-    // BMS
-    SerialUSB.print(Global_BMS_voltage);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_BMS_minvoltage);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_BMS_maxvoltage);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_BMS_current);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_BMS_soc);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_BMS_temp);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_BMS_mintemp);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_BMS_maxtemp);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_BMS_status);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_BMS_state);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_BMS_capacity);
-    SerialUSB.print(",");
-    // EV2
-    SerialUSB.print(Global_car_state);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_battfault);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_isofault);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_throttle1);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_throttle2);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_avethrottle);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_brake);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_LVBATT_V);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_HV_V);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_error);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_tsa);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_relay);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_high_current);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_insulation_pwm);
-    SerialUSB.print(",");
-    SerialUSB.print(Global_start_button);
-    
-    SerialUSB.print("#");
+
+    return output;
 }
 
 /****************************************************************/
@@ -349,10 +269,8 @@ void enable_drive(bool enable) {
 }
 
 void set_speaker(bool enable) {
-    pinMode(39,OUTPUT);
-    digitalWrite(39,enable);
+    digitalWrite(SPKR,enable);
     speakerOn = enable;
-    // Global_Air_temp = (int)speakerOn;
 }
 
 void offSpeaker(void) {
@@ -361,55 +279,28 @@ void offSpeaker(void) {
 }
 
 void set_rfe_frg(bool rfe, bool frg) {
-    // RFE (p37)
-    pinMode(37, OUTPUT);
-    digitalWrite(37, rfe);
-    // FRG (p35)
-    pinMode(35, OUTPUT);
-    digitalWrite(35, frg);
-
+    digitalWrite(MCRFE, rfe);
+    digitalWrite(MCFRG, frg);
     Global_rfe = (int)rfe;
     Global_frg = (int)frg;
 }
 void set_tracsys_relay(bool relay) {
-    // tractive system shutdown relay
-    pinMode(33, OUTPUT);
-    digitalWrite(33, relay);
-
+    digitalWrite(TSDUESD, relay);
     Global_relay = (int)relay;
 }
 void inputChanged(void) {
-    Global_battfault = (int)digitalRead(43);
-    Global_isofault = (int)digitalRead(49);
-    Global_start_button = (int)digitalRead(41);
+    Global_battfault = (int)digitalRead(BATFLT);
+    Global_insufault = (int)digitalRead(IMDSTIN);
+    // Global_Air_temp = (int)digitalRead(DBSSTSD);
+}
 
-    if(Global_car_state == DRIVE) {
-        // switch turns off drive but locked to FAULT state
-        if (Global_start_button == 0) {
-            Global_car_state == IDLE;
-            enable_drive(false);
-            set_tracsys_relay(true);
-            setIdleState();
-        }
-        // Check if TSA went from High to Low
-        if (Global_tsa == 1 && (int)digitalRead(45) == 0) {
-            Global_tsa = (int)digitalRead(45);
-            announceError("E7");
-            emergency_stop();
-        }
+void tsaChanged() {
+    // Toggle
+    if(Global_tsa == 1 && (int)digitalRead(TSA) == 0) {
+        announceError("E7");
+        emergency_stop();
     }
-    else if(Global_car_state == IDLE) {
-        if (Global_tsa == 1 && (int)digitalRead(45) == 0) {
-            Global_tsa = (int)digitalRead(45);
-            announceError("E7");
-            emergency_stop();
-        }
-        // In IDLE state, if Switch switched on, turn on relay (get ready for enable DRIVE)
-        if (Global_start_button == 1) {
-            set_tracsys_relay(true);
-        }
-    }
-    Global_tsa = (int)digitalRead(45);
+    Global_tsa = (int)digitalRead(TSA);
 }
 
 /****************************************************************/
@@ -420,6 +311,8 @@ void inputChanged(void) {
 
 void setIdleState() {
     Global_car_state = IDLE;
+    enable_drive(false);
+    set_tracsys_relay(true);
     Timer3.stop();
     Timer3.attachInterrupt(idleStateChecks).setFrequency(10).start();
 }
@@ -430,31 +323,37 @@ void idleStateChecks() {
     // MC Torque set to 0
     CAN_FRAME outgoing;
     createTorqueWriteFrame(outgoing,0);
-    CAN.sendFrame(outgoing);
+    Can1.sendFrame(outgoing);
 
     if (Global_tsa == 1) {
         if(speakerFirstToggle) {
-            // set_speaker(true);
+            set_speaker(true);
             Timer7.attachInterrupt(offSpeaker).setFrequency(1).start();
         }
     }
 
-    // Global_Air_temp = (int)speakerOn;
-
     // if start button on and tsa on, drive state
-    if (Global_start_button ==  1 && Global_tsa == 1) {
-        // Global_brake = get_average_brake_reading_value();
-        // if (Global_brake >= 0.25 * MAX_THROTTLE) {
-            setDriveState();
-        // }
-    }
+    // if (Global_start_button ==  1 && Global_tsa == 1) {
+    //     // Global_brake = get_average_brake_reading_value();
+    //     // if (Global_brake >= 0.25 * MAX_THROTTLE) {
+    //         setDriveState();
+    //     // }
+    // }
 }
 
 void setDriveState() {
-    Global_car_state = DRIVE;
-    enable_drive(true);
-    Timer3.stop();
-    Timer3.attachInterrupt(sendThrottle).setFrequency(100).start();
+    Global_start_button = (int)digitalRead(DBSSTSD);
+    // Global_Air_temp = Global_start_button;
+    if (Global_start_button == 1 && Global_car_state == IDLE) {
+        Global_car_state = DRIVE;
+        enable_drive(true);
+        Timer3.stop();
+        Timer3.attachInterrupt(sendThrottle).setFrequency(100).start();
+    }
+    else if (Global_start_button == 0 && Global_car_state == DRIVE) {
+        Global_car_state = IDLE;
+        setIdleState();
+    }
 }
 
 void checkBrakeThrottle() {
@@ -464,22 +363,27 @@ void checkBrakeThrottle() {
     }
 
     if (Global_brake > BRAKE_LIMIT && Global_avethrottle > THROTTLE_LIMIT) {
-        announceError("E4");
+        // announceError("E4");
+        // emergency_stop();
+    }
+
+    if (Global_brake >= BRAKE_ACTUATED && Global_avethrottle >= 0.25 * MAX_THROTTLE) {
+        announceError("E9");
         emergency_stop();
     }
 
-    if(throttleEnable) {
-        if(Global_brake >= BRAKE_ACTUATED && Global_avethrottle >= 0.25 * MAX_THROTTLE) {
-            throttleEnable = false;
-            announceError("E9");
-        }
-    }
-    else {
-        if (Global_avethrottle < 0.05 * MAX_THROTTLE) {
-            throttleEnable = true;
-            // announceError("E10");
-        }
-    }
+    // if(throttleEnable) {
+    //     if(Global_brake >= BRAKE_ACTUATED && Global_avethrottle >= 0.25 * MAX_THROTTLE) {
+    //         throttleEnable = false;
+    //         announceError("E9");
+    //     }
+    // }
+    // else {
+    //     if (Global_avethrottle < 0.05 * MAX_THROTTLE) {
+    //         throttleEnable = true;
+    //         // announceError("E10");
+    //     }
+    // }
 }
 
 /****************************************************************/
@@ -489,20 +393,15 @@ void checkBrakeThrottle() {
  */
 
 bool CAN_setup() {
-	if (CAN.init(CAN_BPS_1000K) && CAN2.init(CAN_BTR)) {}
+    if (Can0.begin(CAN_BPS_1000K) && Can1.begin(CAN_BPS_1000K)){
+        for (int filter = 0; filter < 7; filter++) {
+            Can0.setRXFilter(filter, 0, 0, false);
+            Can1.setRXFilter(filter, 0, 0, false);
+        }  
+        return true;
+    }
     else
-		return false;
-
-    //By default there are 7 mailboxes for each device that are RX boxes
-    //This sets each mailbox to have an open filter that will accept extended
-    //or standard frames
-    int filter;
-    for (int filter = 0; filter < 7; filter++) {
-        CAN.setRXFilter(filter, 0, 0, false);
-        CAN2.setRXFilter(filter, 0, 0, false);
-    }      
-
-    return true;
+        return false;
 }
 
 void printFrame(CAN_FRAME &frame) {
@@ -614,38 +513,38 @@ void createTorqueWriteFrame(CAN_FRAME &frame, float torque) {
 
 void request_MC_speed(void) {
     CAN_FRAME speedRequest;
-    int repetition = 200; // 100ms
+    int repetition = 200; // 500ms
     // int repetition = 0;
     createSpeedRequestFrame(speedRequest,repetition);
-    CAN.sendFrame(speedRequest);
+    Can1.sendFrame(speedRequest);
 }
 
 void request_MC_torque(void) {
     CAN_FRAME torqueRequest;
     int repetition = 200; // 100ms
     createTorqueRequestFrame(torqueRequest,repetition);
-    CAN.sendFrame(torqueRequest);
+    Can1.sendFrame(torqueRequest);
 }
 
 void request_MC_current(void) {
     CAN_FRAME currentRequest;
-    int repetition = 500; // 500ms
+    int repetition = 200; // 500ms
     createCurrentRequestFrame(currentRequest,repetition);
-    CAN.sendFrame(currentRequest);
+    Can1.sendFrame(currentRequest);
 }
 
 void request_MC_voltage(void) {
     CAN_FRAME voltageRequest;
-    int repetition = 500; // 500ms
+    int repetition = 200; // 500ms
     createVoltageRequestFrame(voltageRequest,repetition);
-    CAN.sendFrame(voltageRequest);
+    Can1.sendFrame(voltageRequest);
 }
 
 bool parseFrame(CAN_FRAME &frame) {
-
-    newCANMessages = true;
     if (frame.id == NDRIVE_TXID) {
+        newCANMessages = true;
         mc_message_count++;
+        mc_message_count %= 10000;
         switch(frame.data.bytes[0]) {
             // MC Related
             case SPEED_READ_ADD: {
@@ -735,9 +634,11 @@ bool parseFrame(CAN_FRAME &frame) {
 
                 if (minVoltage < MIN_VOLT_BMS_LIMIT) {
                     announceError("B2");
+                    emergency_stop();
                 }
                 if (maxVoltage > MAX_VOLT_BMS_LIMIT) {
                     announceError("B3");
+                    emergency_stop();
                 }
                 break;
             }
@@ -805,12 +706,12 @@ void adc_setup(void) {
     adc_enable_channel(ADC, BRAKE_PEDAL_CHANNEL);
 
     // Enable ADC channels for LV and HV measuring
-    adc_enable_channel(ADC, LV_BATTERY_V);
+    adc_enable_channel(ADC, LV_BATTERY_V12);
+    adc_enable_channel(ADC, LV_BATTERY_V24);
     adc_enable_channel(ADC, HV_V);
     adc_enable_channel(ADC, HV_CURRENT);
 
-    // Temperature Sensor
-    adc_enable_channel(ADC, LV_TEMP);
+    adc_enable_channel(ADC, LV_BATTERY_TEMP);
 
     // Enable ADC interrupt
     adc_enable_interrupt(ADC, ADC_IER_EOC7); //EOC9 so that interrupt triggered when analogue input channerl 9 has reached end of conversion
@@ -835,18 +736,22 @@ void ADC_Handler(void) {
 
         brake_raw = adc_get_channel_value(ADC, BRAKE_PEDAL_CHANNEL);
 
-        Global_LVBATT_V = adc_get_channel_value(ADC, LV_BATTERY_V)/233.3;;
+        Global_LVBATT_V12 = adc_get_channel_value(ADC, LV_BATTERY_V12)/313.0;
+        Global_LVBATT_V24 = adc_get_channel_value(ADC, LV_BATTERY_V24)/163.0;
+        Global_LVBATT_TEMP = adc_get_channel_value(ADC, LV_BATTERY_TEMP);
         Global_HV_V = adc_get_channel_value(ADC, HV_V);
         Global_high_current = adc_get_channel_value(ADC, HV_CURRENT);
-
-        Global_LVTEMP = adc_get_channel_value(ADC, LV_TEMP);
     }
     adc_start(ADC);
 }
 
 void checkForFaults(void) {
-    if(Global_LVBATT_V != -1 && Global_LVBATT_V < MIN_LV) {
-        announceError("E6");
+    if(Global_LVBATT_V12 != -1 && Global_LVBATT_V12 < MIN_12LV) {
+        announceError("E6-12");
+        emergency_stop();
+    }
+    if(Global_LVBATT_V24 != -1 && Global_LVBATT_V24 < MIN_24LV) {
+        announceError("E6-24");
         emergency_stop();
     }
 }
@@ -868,7 +773,7 @@ void emergency_stop() {
     // 2. send 0 throttle to MC
     CAN_FRAME outgoing;
     createTorqueWriteFrame(outgoing,0);
-    CAN.sendFrame(outgoing);
+    Can1.sendFrame(outgoing);
 
     // 3. Disable Drive (RFE, FRG, TSA RELAY)
     enable_drive(false);
@@ -893,12 +798,12 @@ void assert_or_abort(bool condition) {
  * -----------------------
  */
 
-const int pedal1_min = 450;  // pedal1 min value in 12-bit range
-const int pedal1_max = 1200; // pedal1 max value in 12-bit range
-const int pedal2_min = 450;  // pedal2 min value in 12-bit range
-const int pedal2_max = 1100; // pedal2 max value in 12-bit range
-const int brake_min = 1250;
-const int brake_max = 2500;
+const int pedal1_min = 1900;  // pedal1 min value in 12-bit range
+const int pedal1_max = 3200; // pedal1 max value in 12-bit range
+const int pedal2_min = 2900;  // pedal2 min value in 12-bit range
+const int pedal2_max = 3900; // pedal2 max value in 12-bit range
+const int brake_min = 200;
+const int brake_max = 700;
 
 /**
  * Processes pedal reading. Maps value to 16-bit range.
@@ -930,40 +835,43 @@ int get_average_pedal_reading_value() {
     }
 
     if(pedal2_raw > 1.5 * pedal2_max) {
-        announceError("E12");
+        // announceError("E12");
     }
 
     int reading_1 = get_pedal_reading(pedal1_raw, pedal1_min, pedal1_max);
     int reading_2 = get_pedal_reading(pedal2_raw, pedal2_min, pedal2_max);
-    
-    // Global_throttle1 = reading_1;
-    // Global_throttle2 = reading_1;
-    Global_throttle1 = 0;
-    Global_throttle2 = 0;
 
-    // assert_pedal_in_threshold(reading_1, reading_2, MAX_THROTTLE_DIFF);
+    reading_2 = 65536 - reading_2;
+
+    Global_throttle1 = pedal1_raw;
+    Global_throttle2 = pedal2_raw;
+
+    assert_pedal_in_threshold(reading_1, reading_2, MAX_THROTTLE_DIFF);
 
     Global_avethrottle = get_average_pedal_reading(reading_1,reading_2);
 
-    if (pedal1_raw < 200) {
-        announceError("E1");
-        emergency_stop();
+    if (pedal1_raw < 150) {
+        // announceError("E1");
+        // emergency_stop();
     }
-    if (pedal2_raw < 200) {
-        announceError("E2");
-        emergency_stop();
+    if (pedal2_raw < 150) {
+        // announceError("E2");
+        // emergency_stop();
     }
 
     return Global_avethrottle;
-    // return 0;
 }
 
 int get_average_brake_reading_value() {
     Global_brake = get_pedal_reading(brake_raw, brake_min, brake_max);
-    // Global_brake = brake_raw;
-    if (brake_raw < 400) {
+    Global_brake = brake_raw;
+    if (brake_raw < 50) {
         // announceError("E3");
         // emergency_stop();
+    }
+    if (brake_raw >= BRAKE_ACTUATED && Global_MC_current >= 20 && Global_car_state == DRIVE) {
+        announceError("E-BPD");
+        emergency_stop();
     }
     return Global_brake;
 }
@@ -1000,33 +908,32 @@ void assert_pedal_in_threshold(const int reading_1, const int reading_2, const i
     }
 
     if(conditionCounter == 2) {
-        String error = "E5";
-        error += ":";
-        error += "[R1]";
-        error += reading_1;
-        error += "[R2]";
-        error += reading_2;
-        error += "[R1-R2]";
-        error += abs(reading_1-reading_2);
-        error += "\n";
+        // String error = "E5";
+        // error += ":";
+        // error += "[R1]";
+        // error += reading_1;
+        // error += "[R2]";
+        // error += reading_2;
+        // error += "[R1-R2]";
+        // error += abs(reading_1-reading_2);
 
-        announceError(error);
-        emergency_stop();
+        // announceError(error);
+        // emergency_stop();
     }
 }
 
 void sendThrottle(void) {
     float torque = get_average_pedal_reading_value();
     torque /= MAX_THROTTLE;
-    // Global_throttle1 = torque;
     torque *= 0.5;
-    // Global_throttle2 = torque;
+
     if (!throttleEnable) {
         torque = 0;
     }
+
     CAN_FRAME outgoing;
     createTorqueWriteFrame(outgoing,torque);
-    CAN.sendFrame(outgoing);
+    Can1.sendFrame(outgoing);
 }
 
 void announceError(String error) {
@@ -1034,8 +941,9 @@ void announceError(String error) {
         Global_error = error;
     }
     else {
-        // Global_error += ";";
-        Global_error = error;
+        Global_error += ";";
+        Global_error += error;
+        // Global_error = error;
     }
 }
 void checkCANComms(void) {
@@ -1044,18 +952,25 @@ void checkCANComms(void) {
     }
     else {
         // announceError("E8");
+        // emergency_stop();
     }
 }
 
 void check_MC_comms(void) {
+
     // If no MC response
-    if(mc_message_count == MC_comms || Global_MC_speed == -1 || Global_MC_torque == -1 || Global_MC_current == -1 || Global_MC_voltage == -1) {
+    // if (MC_comms == mc_message_count) {
+    //     // announceError("E8");
+    //     // emergency_stop();
+    // }
+    // else {
+    //     MC_comms = mc_message_count;
+    // }
+    if(Global_MC_speed == -1 || Global_MC_torque == -1 || Global_MC_current == -1 || Global_MC_voltage == -1) {
         request_MC_speed();
         request_MC_torque();
         request_MC_current();
         request_MC_voltage();
-    }
-    else {
-        MC_comms = mc_message_count;
+
     }
 }

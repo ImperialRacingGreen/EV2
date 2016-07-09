@@ -1,23 +1,27 @@
 #ifndef EV2_CAN
 #define EV2_CAN
 
-#include "due_can.h"
+#include "variant.h"
+#include <due_can.h>
 #include "DueTimer.h"
+#include <Arduino.h>
+#include "math.h"
+
 /**
 * CANBus related constants
 **/
-#define CAN_BTR CAN_BPS_500K
+#define MC_CAN_BTR CAN_BPS_500K
 #define NDRIVE_RXID 0x210
 #define NDRIVE_TXID 0x190
 
 // Writing
 #define SPEED_WRITE_ADD		0x31
-#define MAX_SPEED_WRITE 	0x7FFF
-#define TORQUE_WRITE_ADD	0x90
-#define MAX_TORQUE_WRITE	32760
+#define MAX_SPEED_WRITE		0x7FFF
+#define TORQUE_WRITE_ADD		0x90
+#define MAX_TORQUE_WRITE		32760
 
 #define MAX_THROTTLE 65536
-#define MAX_THROTTLE_DIFF 6554
+#define MAX_THROTTLE_DIFF 10000
 #define BRAKE_ACTUATED 10000
 
 // Reading
@@ -32,15 +36,15 @@
 #define CORE_STATUS		0x40
 #define KERN_STATUS		0x181 		// Bit 0 = Drive Enabled, Bit 7 = Position Control, Bit 8 = Speed Control
 
-void updateDB3(void);	// All variables
-void updateDB4(void);	// Optimisation
-void updateDB5(void);	// Navtive USB
+void updateDB(void);	// All variables
+String getDB(void);
 
 void enable_drive(bool enable);
 void set_rfe_frg(bool rfe, bool frg);
 void set_tracsys_relay(bool x);
 void set_speaker(bool enable);
 void inputChanged(void);
+void tsaChanged(void);
 
 bool CAN_setup();
 void printFrame(CAN_FRAME &frame);
@@ -81,13 +85,15 @@ void createTorqueWriteFrame(CAN_FRAME &frame, float torque);
 *	Pedal Reading
 **/
 // Pedal channels
-#define LV_BATTERY_V ADC_CHANNEL_1
-#define LV_TEMP ADC_CHANNEL_0
-#define HV_V ADC_CHANNEL_2
-#define HV_CURRENT ADC_CHANNEL_12
-#define PEDAL1_ADC_CHANNEL ADC_CHANNEL_7 // this is A0
-#define PEDAL2_ADC_CHANNEL ADC_CHANNEL_6 // this is A1
-#define BRAKE_PEDAL_CHANNEL ADC_CHANNEL_5 // this is A2
+#define LV_BATTERY_V12 			ADC_CHANNEL_4 		// A3
+#define LV_BATTERY_V24 			ADC_CHANNEL_3 		// A4
+#define LV_BATTERY_TEMP		ADC_CHANNEL_0 		// A7 or A8
+// #define LV_BATTERY_TEMP		ADC_CHANNEL_10 		// A7 or A8
+#define HV_V 						ADC_CHANNEL_13 					// A11
+#define HV_CURRENT 				ADC_CHANNEL_12 		// A10
+#define PEDAL1_ADC_CHANNEL 	ADC_CHANNEL_6 // this is A1
+#define PEDAL2_ADC_CHANNEL 	ADC_CHANNEL_7 // this is A0
+#define BRAKE_PEDAL_CHANNEL 	ADC_CHANNEL_5 // this is A2
 #define BRAKE_LIMIT 60000
 #define THROTTLE_LIMIT 60000
 
@@ -121,15 +127,30 @@ void announceError(String error);
 
 #define MAX_BMS_TEMP	100
 #define MIN_BMS_TEMP	0
-#define MIN_VOLT_BMS_LIMIT	0
-#define MAX_VOLT_BMS_LIMIT	350
+#define MIN_VOLT_BMS_LIMIT	2.8
+#define MAX_VOLT_BMS_LIMIT	4.2
 
 /**
 *	Fault Checks
 **/
-#define MIN_LV 11.8
-
+#define MIN_12LV 10
+#define MIN_24LV 22
 void checkCANComms(void);
 void check_MC_comms(void);
 void offSpeaker(void);
+
+/**
+*	Pin Numbers
+**/
+#define DBSSTSD		24
+#define IMDDIN 		25
+#define SPKR			26
+#define TSA			27
+#define MCFRG		28
+#define MCRFE 		29
+#define TSDUESD		30
+#define HVRCHRSW 	41
+#define BATFLT		43
+#define IMDSTIN		49
+
 #endif
