@@ -60,7 +60,6 @@ void request_MC_voltage(void);
 
 // void sendTorque(int torque_percent);
 void emergency_stop();
-void assert_or_abort(bool condition);
 
 #define SPEED_REPETITION 100
 void createMCTempRequestFrame(CAN_FRAME &frame);
@@ -115,6 +114,7 @@ void setDriveState(void);
 void checkForFaults(void);
 
 void announceError(String error);
+void clearErrors();
 
 /**
 *	BMS Related Constants

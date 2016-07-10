@@ -6,7 +6,7 @@
  * -------------------
  */
 // Motor Controller
-volatile int Global_MC_speed  = -1; // 1 revolution = 0.533m = 0.032 kph //RPM
+volatile int Global_MC_speed  = -1000; // 1 revolution = 0.533m = 0.032 kph //RPM
 volatile int Global_MC_kph = -1;
 volatile int Global_MC_torque = -1;        
 volatile int Global_Air_temp = -1;                   
@@ -61,8 +61,8 @@ volatile bool throttleEnable = true;
 // Comms
 unsigned int mc_message_count = 0;
 unsigned int bms_message_count = 0;
-bool newCANMessages = false;
-unsigned int MC_comms = 0;
+unsigned int t_mc_message_count = -1;
+unsigned int t_bms_message_count = -1;
 
 unsigned int conditionCounter = 0;
 
@@ -70,7 +70,6 @@ bool speakerFirstToggle = true;
 bool speakerOn = false;
 
 void updateDB(void) {
-    digitalWrite(52, HIGH);
     Serial.print("@");
     // Motor Controller
     Serial.print(Global_MC_speed);
@@ -161,7 +160,6 @@ void updateDB(void) {
     
     Serial.print("#");
     Serial.flush();
-    digitalWrite(52, LOW);
 }
 
 String getDB() {
@@ -291,7 +289,7 @@ void set_tracsys_relay(bool relay) {
 void inputChanged(void) {
     Global_battfault = (int)digitalRead(BATFLT);
     Global_insufault = (int)digitalRead(IMDSTIN);
-    // Global_Air_temp = (int)digitalRead(DBSSTSD);
+    Global_Air_temp = (int)digitalRead(DBSSTSD);
 }
 
 void tsaChanged() {
@@ -343,7 +341,8 @@ void idleStateChecks() {
 
 void setDriveState() {
     Global_start_button = (int)digitalRead(DBSSTSD);
-    // Global_Air_temp = Global_start_button;
+    Global_Air_temp = Global_start_button; // Temp
+
     if (Global_start_button == 1 && Global_car_state == IDLE) {
         Global_car_state = DRIVE;
         enable_drive(true);
@@ -362,10 +361,10 @@ void checkBrakeThrottle() {
         get_average_pedal_reading_value();
     }
 
-    if (Global_brake > BRAKE_LIMIT && Global_avethrottle > THROTTLE_LIMIT) {
-        // announceError("E4");
-        // emergency_stop();
-    }
+    // if (Global_brake > BRAKE_LIMIT && Global_avethrottle > THROTTLE_LIMIT) {
+    //     // announceError("E4");
+    //     // emergency_stop();
+    // }
 
     if (Global_brake >= BRAKE_ACTUATED && Global_avethrottle >= 0.25 * MAX_THROTTLE) {
         announceError("E9");
@@ -542,9 +541,10 @@ void request_MC_voltage(void) {
 
 bool parseFrame(CAN_FRAME &frame) {
     if (frame.id == NDRIVE_TXID) {
-        newCANMessages = true;
+        
         mc_message_count++;
         mc_message_count %= 10000;
+
         switch(frame.data.bytes[0]) {
             // MC Related
             case SPEED_READ_ADD: {
@@ -582,7 +582,7 @@ bool parseFrame(CAN_FRAME &frame) {
                 Global_MC_temp = log(temp/15536)/0.0053;
                 if (Global_MC_temp > MC_TEMP_LIMIT) {
                     announceError("M1");
-                    // emergency_stop();
+                    emergency_stop();
                 }
                 break;
             }
@@ -591,7 +591,7 @@ bool parseFrame(CAN_FRAME &frame) {
                 Global_MC_motortemp = (temp - 10110)/51.7;
                 if (Global_MC_temp > MOTOR_TEMP_LIMIT) {
                     announceError("M2");
-                    // emergency_stop();
+                    emergency_stop();
                 }
                 break;
             }
@@ -600,6 +600,7 @@ bool parseFrame(CAN_FRAME &frame) {
     // BMS Related
     else {
         bms_message_count++;
+        bms_message_count %= 10000;
         switch (frame.id) {
             case BMS_STATE: {
                 Global_BMS_state = frame.data.bytes[0];
@@ -609,7 +610,7 @@ bool parseFrame(CAN_FRAME &frame) {
                     announceError("B1");
                 }
                 if (Global_BMS_fault != 0) {
-                    announceError("B5");
+                    announceError("B4");
                     bool underVoltage = (Global_BMS_fault & ( 1 << 6 )) >> 7 & 6;
                     bool overVoltage = (Global_BMS_fault & ( 1 << 7 )) >> 7 & 1;
                     // voltage too low B2
@@ -633,11 +634,11 @@ bool parseFrame(CAN_FRAME &frame) {
                 Global_BMS_maxvoltage = maxVoltage;
 
                 if (minVoltage < MIN_VOLT_BMS_LIMIT) {
-                    announceError("B2");
+                    announceError("B6");
                     emergency_stop();
                 }
                 if (maxVoltage > MAX_VOLT_BMS_LIMIT) {
-                    announceError("B3");
+                    announceError("B7");
                     emergency_stop();
                 }
                 break;
@@ -660,8 +661,8 @@ bool parseFrame(CAN_FRAME &frame) {
                 Global_BMS_maxtemp = frame.data.bytes[4];
 
                 if (Global_BMS_maxtemp > MAX_BMS_TEMP) {
-                    announceError("B4");
-                    return false;
+                    announceError("B5");
+                    emergency_stop();
                 }
 
                 break;
@@ -781,17 +782,6 @@ void emergency_stop() {
     Global_car_state = FAULT;
 }
 
-/**
- * Emergency stop the vehicle if condition is invalid.
- * @param condition
- */
-void assert_or_abort(bool condition) {
-    if ( ! condition) {
-        // announceError("E12");
-        // emergency_stop();
-    }
-}
-
 /****************************************************************/
 /**
  * Pedal reading functions
@@ -835,7 +825,7 @@ int get_average_pedal_reading_value() {
     }
 
     if(pedal2_raw > 1.5 * pedal2_max) {
-        // announceError("E12");
+        announceError("E12");
     }
 
     int reading_1 = get_pedal_reading(pedal1_raw, pedal1_min, pedal1_max);
@@ -851,12 +841,12 @@ int get_average_pedal_reading_value() {
     Global_avethrottle = get_average_pedal_reading(reading_1,reading_2);
 
     if (pedal1_raw < 150) {
-        // announceError("E1");
-        // emergency_stop();
+        announceError("E1");
+        emergency_stop();
     }
     if (pedal2_raw < 150) {
-        // announceError("E2");
-        // emergency_stop();
+        announceError("E2");
+        emergency_stop();
     }
 
     return Global_avethrottle;
@@ -866,8 +856,8 @@ int get_average_brake_reading_value() {
     Global_brake = get_pedal_reading(brake_raw, brake_min, brake_max);
     Global_brake = brake_raw;
     if (brake_raw < 50) {
-        // announceError("E3");
-        // emergency_stop();
+        announceError("E3");
+        emergency_stop();
     }
     if (brake_raw >= BRAKE_ACTUATED && Global_MC_current >= 20 && Global_car_state == DRIVE) {
         announceError("E-BPD");
@@ -886,20 +876,6 @@ void assert_pedal_in_threshold(const int reading_1, const int reading_2, const i
     int difference = abs(reading_1 - reading_2);
     bool condition = difference < threshold;
 
-    #ifdef SerialDebug
-    if ( ! condition) {
-        SerialDebug.println("Pedal reading discrepancy detected!");
-        SerialDebug.print("Reading (1): ");
-        SerialDebug.println(reading_1);
-        SerialDebug.print("Reading (2): ");
-        SerialDebug.println(reading_2);
-        SerialDebug.print("Threshold: ");
-        SerialDebug.println(threshold);
-        SerialDebug.print("Difference: ");
-        SerialDebug.println(difference);
-    }
-    #endif
-
     if(!condition) {
         conditionCounter++;
     }
@@ -907,17 +883,17 @@ void assert_pedal_in_threshold(const int reading_1, const int reading_2, const i
         conditionCounter = 0;
     }
 
-    if(conditionCounter == 2) {
-        // String error = "E5";
-        // error += ":";
-        // error += "[R1]";
-        // error += reading_1;
-        // error += "[R2]";
-        // error += reading_2;
-        // error += "[R1-R2]";
-        // error += abs(reading_1-reading_2);
+    if(conditionCounter == 5) {
+        String error = "E5";
+        error += ":";
+        error += "[R1]";
+        error += reading_1;
+        error += "[R2]";
+        error += reading_2;
+        error += "[R1-R2]";
+        error += abs(reading_1-reading_2);
 
-        // announceError(error);
+        announceError(error);
         // emergency_stop();
     }
 }
@@ -926,10 +902,6 @@ void sendThrottle(void) {
     float torque = get_average_pedal_reading_value();
     torque /= MAX_THROTTLE;
     torque *= 0.5;
-
-    if (!throttleEnable) {
-        torque = 0;
-    }
 
     CAN_FRAME outgoing;
     createTorqueWriteFrame(outgoing,torque);
@@ -946,31 +918,32 @@ void announceError(String error) {
         // Global_error = error;
     }
 }
-void checkCANComms(void) {
-    if (newCANMessages) {
-        newCANMessages = false;
-    }
-    else {
-        // announceError("E8");
-        // emergency_stop();
-    }
+
+void clearErrors() {
+    Global_error = "OK";
 }
 
-void check_MC_comms(void) {
-
-    // If no MC response
-    // if (MC_comms == mc_message_count) {
-    //     // announceError("E8");
-    //     // emergency_stop();
-    // }
-    // else {
-    //     MC_comms = mc_message_count;
-    // }
-    if(Global_MC_speed == -1 || Global_MC_torque == -1 || Global_MC_current == -1 || Global_MC_voltage == -1) {
+void checkCANComms(void) {
+    if(Global_MC_speed == -1000 || Global_MC_torque == -1 || Global_MC_current == -1 || Global_MC_voltage == -1) {
         request_MC_speed();
         request_MC_torque();
         request_MC_current();
         request_MC_voltage();
+    }
+    
+    if (t_mc_message_count == mc_message_count) {
+        // announceError("M3");
+        // emergency_stop();
+    }
+    else {
+        t_mc_message_count = mc_message_count;
+    }
 
+    if (t_bms_message_count == bms_message_count) {
+        // announceError("B8");
+        // emergency_stop();
+    }
+    else {
+        t_bms_message_count = bms_message_count;
     }
 }

@@ -31,7 +31,6 @@ void EV2_setup(void) {
 }
 
 void slow_requests(void) {
-    check_MC_comms();
     request_temperatures();
     checkBrakeThrottle();
     request_MC_status();
@@ -54,7 +53,6 @@ void request_MC_status(void) {
 }
 
 void MC_request(void) {
-    delay(100);
     request_MC_speed();
     delay(100);
     request_MC_torque();
@@ -82,21 +80,29 @@ void setup() {
     //set up hardware interrupt for reading throttle
     Timer4.attachInterrupt(slow_requests).setFrequency(1).start();
     Timer6.attachInterrupt(checkForFaults).setFrequency(1).start();
+    Timer8.attachInterrupt(clearErrors).setFrequency(0.5).start();
     
     Serial.begin(115200);
+    updateDB();
     Timer5.attachInterrupt(updateTime).setFrequency(50).start();
+    // Timer5.attachInterrupt(outputSerial).setFrequency(10).start();
     delay(100);
 
     pinMode(23, OUTPUT);
     pinMode(22, OUTPUT);
+    pinMode(52, OUTPUT);
 }
 
 int time_x = 0;
 void loop() {
+    checkCANComms();
+
     if(time_x == 0){
+        digitalWrite(52, HIGH);
         updateDB();
-        slow_requests();
+        digitalWrite(52, LOW);
     }
+    
     CAN_FRAME incoming;
     if (Can0.available()) {
         digitalWrite(23, HIGH);
@@ -114,5 +120,12 @@ void loop() {
 
 void updateTime() {
     time_x += 1;
-    time_x = time_x % 50;
+    time_x = time_x % 10;
+}
+
+void outputSerial() {
+    digitalWrite(52, HIGH);
+    Serial.print(getDB());
+    Serial.flush();
+    digitalWrite(52, LOW);
 }
