@@ -1,4 +1,5 @@
 #include "EV2_CAN.h"
+#define Serial SerialUSB
 
 void pin_setup(void) {
     // Inputs
@@ -13,6 +14,9 @@ void pin_setup(void) {
     pinMode(MCRFE, OUTPUT);
     pinMode(MCFRG, OUTPUT);
     pinMode(TSDUESD, OUTPUT);
+
+    // pinMode(DAC1, OUTPUT);
+    // analogWriteResolution(12);
 }
 
 void MC_setup(void) {  
@@ -28,12 +32,6 @@ void EV2_setup(void) {
 
     inputChanged();
     tsaChanged();
-}
-
-void slow_requests(void) {
-    request_temperatures();
-    checkBrakeThrottle();
-    request_MC_status();
 }
 
 void request_temperatures(void) {
@@ -77,16 +75,19 @@ void setup() {
     // Set car to IDLE state
     setIdleState();
 
+    int16_t analogOutput = 0;
+    // analogWriteResolution(12);
+    analogWrite(DAC1, analogOutput);
+
     //set up hardware interrupt for reading throttle
-    Timer4.attachInterrupt(slow_requests).setFrequency(1).start();
-    Timer6.attachInterrupt(checkForFaults).setFrequency(1).start();
-    Timer8.attachInterrupt(clearErrors).setFrequency(0.5).start();
+    Timer4.attachInterrupt(checkForFaults).setFrequency(1).start();
+    Timer5.attachInterrupt(updateDB).setFrequency(5).start();
+    // Timer8.attachInterrupt(clearErrors).setFrequency(0.5).start();
     
     Serial.begin(115200);
     updateDB();
-    Timer5.attachInterrupt(updateTime).setFrequency(50).start();
-    // Timer5.attachInterrupt(outputSerial).setFrequency(10).start();
-    delay(100);
+    // Timer5.attachInterrupt(updateTime).setFrequency(50).start();
+    delay(3000);
 
     pinMode(23, OUTPUT);
     pinMode(22, OUTPUT);
@@ -97,11 +98,11 @@ int time_x = 0;
 void loop() {
     checkCANComms();
 
-    if(time_x == 0){
-        digitalWrite(52, HIGH);
-        updateDB();
-        digitalWrite(52, LOW);
-    }
+    // if(time_x == 0){
+    //     digitalWrite(52, HIGH);
+    //     updateDB();
+    //     digitalWrite(52, LOW);
+    // }
     
     CAN_FRAME incoming;
     if (Can0.available()) {
@@ -120,12 +121,5 @@ void loop() {
 
 void updateTime() {
     time_x += 1;
-    time_x = time_x % 10;
-}
-
-void outputSerial() {
-    digitalWrite(52, HIGH);
-    Serial.print(getDB());
-    Serial.flush();
-    digitalWrite(52, LOW);
+    time_x = time_x % 50;
 }

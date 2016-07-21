@@ -7,10 +7,11 @@
 #include <Arduino.h>
 #include "math.h"
 
+#define Serial SerialUSB
+
 /**
 * CANBus related constants
 **/
-#define MC_CAN_BTR CAN_BPS_500K
 #define NDRIVE_RXID 0x210
 #define NDRIVE_TXID 0x190
 
@@ -20,8 +21,10 @@
 #define TORQUE_WRITE_ADD		0x90
 #define MAX_TORQUE_WRITE		32760
 
-#define MAX_THROTTLE 65536
-#define MAX_THROTTLE_DIFF 10000
+#define MAX_THROTTLE 4096 
+//65536
+#define MAX_THROTTLE_DIFF 2000 
+//10000
 #define BRAKE_ACTUATED 10000
 
 // Reading
@@ -134,7 +137,7 @@ void clearErrors();
 *	Fault Checks
 **/
 #define MIN_12LV 10
-#define MIN_24LV 22
+#define MIN_24LV 20
 void checkCANComms(void);
 void check_MC_comms(void);
 void offSpeaker(void);

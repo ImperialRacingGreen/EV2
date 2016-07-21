@@ -58,6 +58,12 @@ volatile int Global_insulation_pwm = -1;
 volatile int Global_start_button = -1;
 volatile bool throttleEnable = true;
 
+int Global_throttle1_buff[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int Global_throttle2_buff[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+#define THROTTLE_BUFF_SIZE 10
+int Global_avethrottle_buff[5] = {0, 0, 0, 0, 0};
+uint index_counter = 0;
+
 // Comms
 unsigned int mc_message_count = 0;
 unsigned int bms_message_count = 0;
@@ -294,11 +300,12 @@ void inputChanged(void) {
 
 void tsaChanged() {
     // Toggle
-    if(Global_tsa == 1 && (int)digitalRead(TSA) == 0) {
+    int tsa_tmp = (int)digitalRead(TSA);
+    if(Global_tsa == 1 && tsa_tmp == 0) {
         announceError("E7");
         emergency_stop();
     }
-    Global_tsa = (int)digitalRead(TSA);
+    Global_tsa = tsa_tmp;
 }
 
 /****************************************************************/
@@ -319,16 +326,12 @@ void idleStateChecks() {
     Global_car_state = IDLE;
     
     // MC Torque set to 0
-    CAN_FRAME outgoing;
-    createTorqueWriteFrame(outgoing,0);
-    Can1.sendFrame(outgoing);
+    // CAN_FRAME outgoing;
+    // createTorqueWriteFrame(outgoing,0);
+    // Can1.sendFrame(outgoing);
 
-    if (Global_tsa == 1) {
-        if(speakerFirstToggle) {
-            set_speaker(true);
-            Timer7.attachInterrupt(offSpeaker).setFrequency(1).start();
-        }
-    }
+    // int16_t analogOutput = 0;
+    // analogWrite(DAC1, analogOutput);
 
     // if start button on and tsa on, drive state
     // if (Global_start_button ==  1 && Global_tsa == 1) {
@@ -342,8 +345,15 @@ void idleStateChecks() {
 void setDriveState() {
     Global_start_button = (int)digitalRead(DBSSTSD);
     Global_Air_temp = Global_start_button; // Temp
+    
+    get_average_brake_reading_value();
 
-    if (Global_start_button == 1 && Global_car_state == IDLE) {
+    if (Global_start_button == 1 && Global_car_state == IDLE && Global_brake >= BRAKE_ACTUATED) {
+        if(speakerFirstToggle) {
+            set_speaker(true);
+            Timer7.attachInterrupt(offSpeaker).setFrequency(1).start();
+        }
+
         Global_car_state = DRIVE;
         enable_drive(true);
         Timer3.stop();
@@ -361,28 +371,10 @@ void checkBrakeThrottle() {
         get_average_pedal_reading_value();
     }
 
-    // if (Global_brake > BRAKE_LIMIT && Global_avethrottle > THROTTLE_LIMIT) {
-    //     // announceError("E4");
-    //     // emergency_stop();
-    // }
-
     if (Global_brake >= BRAKE_ACTUATED && Global_avethrottle >= 0.25 * MAX_THROTTLE) {
         announceError("E9");
         emergency_stop();
     }
-
-    // if(throttleEnable) {
-    //     if(Global_brake >= BRAKE_ACTUATED && Global_avethrottle >= 0.25 * MAX_THROTTLE) {
-    //         throttleEnable = false;
-    //         announceError("E9");
-    //     }
-    // }
-    // else {
-    //     if (Global_avethrottle < 0.05 * MAX_THROTTLE) {
-    //         throttleEnable = true;
-    //         // announceError("E10");
-    //     }
-    // }
 }
 
 /****************************************************************/
@@ -554,7 +546,7 @@ bool parseFrame(CAN_FRAME &frame) {
                 break;
             }
             case TORQUE_WRITE_ADD: {
-                unsigned int torque = (frame.data.bytes[2] << 8) | frame.data.bytes[1];
+                int torque = (frame.data.bytes[2] << 8) | frame.data.bytes[1];
                 torque = torque * 100 / MAX_TORQUE_WRITE;
                 Global_MC_torque = torque;
                 break;
@@ -634,12 +626,12 @@ bool parseFrame(CAN_FRAME &frame) {
                 Global_BMS_maxvoltage = maxVoltage;
 
                 if (minVoltage < MIN_VOLT_BMS_LIMIT) {
-                    announceError("B6");
-                    emergency_stop();
+                    // announceError("B6");
+                    // emergency_stop();
                 }
                 if (maxVoltage > MAX_VOLT_BMS_LIMIT) {
-                    announceError("B7");
-                    emergency_stop();
+                    // announceError("B7");
+                    // emergency_stop();
                 }
                 break;
             }
@@ -735,6 +727,11 @@ void ADC_Handler(void) {
         pedal1_raw = adc_get_channel_value(ADC, PEDAL1_ADC_CHANNEL);
         pedal2_raw = adc_get_channel_value(ADC, PEDAL2_ADC_CHANNEL);
 
+        Global_throttle1_buff[index_counter] = pedal1_raw;
+        Global_throttle2_buff[index_counter] = pedal2_raw;
+        index_counter++;
+        index_counter %= THROTTLE_BUFF_SIZE;
+
         brake_raw = adc_get_channel_value(ADC, BRAKE_PEDAL_CHANNEL);
 
         Global_LVBATT_V12 = adc_get_channel_value(ADC, LV_BATTERY_V12)/313.0;
@@ -747,13 +744,26 @@ void ADC_Handler(void) {
 }
 
 void checkForFaults(void) {
+    CAN_FRAME MCtempRequest;
+    createMCTempRequestFrame(MCtempRequest);
+    Can1.sendFrame(MCtempRequest); 
+
+    CAN_FRAME MCmotortempRequest;
+    createMotorTempRequestFrame(MCmotortempRequest);
+    Can1.sendFrame(MCmotortempRequest);  
+    checkBrakeThrottle();
+
+    CAN_FRAME MCstatusRequest;
+    createCoreStatusRequestFrame(MCstatusRequest);
+    Can1.sendFrame(MCstatusRequest);     
+
     if(Global_LVBATT_V12 != -1 && Global_LVBATT_V12 < MIN_12LV) {
         announceError("E6-12");
         emergency_stop();
     }
     if(Global_LVBATT_V24 != -1 && Global_LVBATT_V24 < MIN_24LV) {
-        announceError("E6-24");
-        emergency_stop();
+        // announceError("E6-24");
+        // emergency_stop();
     }
 }
 
@@ -772,9 +782,12 @@ void emergency_stop() {
     Timer3.attachInterrupt(checkBrakeThrottle).setFrequency(10).start();
 
     // 2. send 0 throttle to MC
-    CAN_FRAME outgoing;
-    createTorqueWriteFrame(outgoing,0);
-    Can1.sendFrame(outgoing);
+    // CAN_FRAME outgoing;
+    // createTorqueWriteFrame(outgoing,0);
+    // Can1.sendFrame(outgoing);
+
+    // int16_t analogOutput = 0;
+    // analogWrite(DAC1, analogOutput);
 
     // 3. Disable Drive (RFE, FRG, TSA RELAY)
     enable_drive(false);
@@ -792,13 +805,13 @@ const int pedal1_min = 1900;  // pedal1 min value in 12-bit range
 const int pedal1_max = 3200; // pedal1 max value in 12-bit range
 const int pedal2_min = 2900;  // pedal2 min value in 12-bit range
 const int pedal2_max = 3900; // pedal2 max value in 12-bit range
-const int brake_min = 200;
-const int brake_max = 700;
+const int brake_min = 1000;
+const int brake_max = 1500;
 
 /**
  * Processes pedal reading. Maps value to 16-bit range.
  * @param  raw_value Raw value
- * @param  min_value Minimum value
+ * @param  min_value Minimum valu, 0, 0, 0, 0, 010
  * @param  max_value Maximum value
  * @return value     Processed value
  */
@@ -828,17 +841,28 @@ int get_average_pedal_reading_value() {
         announceError("E12");
     }
 
-    int reading_1 = get_pedal_reading(pedal1_raw, pedal1_min, pedal1_max);
-    int reading_2 = get_pedal_reading(pedal2_raw, pedal2_min, pedal2_max);
+    int ave_throttle1 = 0;
+    int ave_throttle2 = 0;
 
-    reading_2 = 65536 - reading_2;
+    for (int i = 0; i < THROTTLE_BUFF_SIZE; i++) {
+        ave_throttle1 += Global_throttle1_buff[i];
+        ave_throttle2 += Global_throttle2_buff[i];
+    }
 
-    Global_throttle1 = pedal1_raw;
-    Global_throttle2 = pedal2_raw;
+    int reading_1 = get_pedal_reading(ave_throttle1/THROTTLE_BUFF_SIZE, pedal1_min, pedal1_max);
+    int reading_2 = get_pedal_reading(ave_throttle2/THROTTLE_BUFF_SIZE, pedal2_min, pedal2_max);
+
+//    reading_2 = 65536 - reading_2;
+reading_1 = 4096-reading_1+2668;
+reading_2 = reading_2-1574;
+    // Global_throttle1 = pedal1_raw;
+    // Global_throttle2 = pedal2_raw;
+    Global_throttle1 = ave_throttle1/THROTTLE_BUFF_SIZE;
+    Global_throttle2 = ave_throttle2/THROTTLE_BUFF_SIZE;
 
     assert_pedal_in_threshold(reading_1, reading_2, MAX_THROTTLE_DIFF);
 
-    Global_avethrottle = get_average_pedal_reading(reading_1,reading_2);
+    Global_avethrottle = (uint)get_average_pedal_reading(reading_1,reading_2);
 
     if (pedal1_raw < 150) {
         announceError("E1");
@@ -849,19 +873,38 @@ int get_average_pedal_reading_value() {
         emergency_stop();
     }
 
+    float torque = Global_avethrottle/MAX_THROTTLE;
+    int16_t analogOutput = 4096 * torque;
+    analogWriteResolution(12);
+    analogWrite(DAC1, analogOutput);
+
     return Global_avethrottle;
 }
 
+int brake_condition = 0;
+int brake_disconnect_condition = 0;
 int get_average_brake_reading_value() {
     Global_brake = get_pedal_reading(brake_raw, brake_min, brake_max);
-    Global_brake = brake_raw;
+    // Global_brake = brake_raw;
     if (brake_raw < 50) {
-        announceError("E3");
-        emergency_stop();
+        brake_disconnect_condition++;
+        if (brake_disconnect_condition == 10) {
+            announceError("E3");
+            emergency_stop();
+        }
     }
-    if (brake_raw >= BRAKE_ACTUATED && Global_MC_current >= 20 && Global_car_state == DRIVE) {
-        announceError("E-BPD");
-        emergency_stop();
+    else {
+        brake_disconnect_condition = 0;
+    }
+    if (Global_brake >= BRAKE_ACTUATED && Global_MC_power >= 5000 && Global_car_state == DRIVE) {
+        brake_condition++;
+        if (brake_condition > 50) {
+            announceError("E-BPD");
+            emergency_stop();
+        }
+        else {
+            brake_condition = 0;
+        }
     }
     return Global_brake;
 }
@@ -900,12 +943,19 @@ void assert_pedal_in_threshold(const int reading_1, const int reading_2, const i
 
 void sendThrottle(void) {
     float torque = get_average_pedal_reading_value();
+    // float torque = 655.36;
     torque /= MAX_THROTTLE;
-    torque *= 0.5;
+    torque *= 0.3;
 
-    CAN_FRAME outgoing;
-    createTorqueWriteFrame(outgoing,torque);
-    Can1.sendFrame(outgoing);
+    get_average_brake_reading_value();
+
+    // CAN_FRAME outgoing;
+    // createTorqueWriteFrame(outgoing,torque);
+    // Can1.sendFrame(outgoing);
+
+    int16_t analogOutput = 4095 * torque;
+    // analogWriteResolution(12);
+    analogWrite(DAC1, analogOutput);
 }
 
 void announceError(String error) {
